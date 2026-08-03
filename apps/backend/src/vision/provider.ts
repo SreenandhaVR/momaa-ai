@@ -1,0 +1,9 @@
+import { DetectFacesCommand, RekognitionClient } from '@aws-sdk/client-rekognition';
+import type { ExpressionLabel } from '../models/expression-log.model.js';
+export type VisionResult = { label: ExpressionLabel; confidence: number; rawProviderLabels: Array<{label:string;confidence:number}> };
+export interface VisionProvider { detectExpression(imageBuffer: Buffer): Promise<VisionResult>; }
+const labels: ExpressionLabel[] = ['calm','happy','distressed','crying','sleepy','confused'];
+const map: Record<string, ExpressionLabel> = { HAPPY:'happy', CALM:'calm', SAD:'distressed', ANGRY:'crying', FEAR:'distressed', CONFUSED:'confused', DISGUSTED:'distressed', SURPRISED:'confused' };
+export class MockVisionProvider implements VisionProvider { async detectExpression(): Promise<VisionResult> { const label=labels[Math.floor(Math.random()*labels.length)]; const confidence=Number((.7+Math.random()*.25).toFixed(2)); return {label,confidence,rawProviderLabels:[{label,confidence}]}; } }
+export class RekognitionVisionProvider implements VisionProvider { private client=new RekognitionClient({ region: process.env.AWS_REGION }); async detectExpression(imageBuffer: Buffer): Promise<VisionResult> { const result=await this.client.send(new DetectFacesCommand({Image:{Bytes:imageBuffer},Attributes:['ALL']})); const emotions=result.FaceDetails?.[0]?.Emotions ?? []; const rawProviderLabels=emotions.map(e=>({label:e.Type??'UNKNOWN',confidence:(e.Confidence??0)/100})); const top=emotions.sort((a,b)=>(b.Confidence??0)-(a.Confidence??0))[0]; return {label: top?.Type ? (map[top.Type]??'unknown') : 'unknown',confidence:(top?.Confidence??0)/100,rawProviderLabels}; } }
+export function getVisionProvider(): VisionProvider { if(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) return new RekognitionVisionProvider(); console.warn('[vision] AWS credentials unavailable; using MockVisionProvider.'); return new MockVisionProvider(); }

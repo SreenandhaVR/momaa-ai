@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Baby } from '@momaa/types';
 import { Button, Card } from '@momaa/ui';
 import { useState } from 'react';
+import { router } from 'expo-router';
 import { ActivityIndicator, Alert, Text, TextInput, View } from 'react-native';
 import { Screen } from '../../components/Screen';
 import { apiRequest } from '../../lib/api';
@@ -45,6 +46,7 @@ export default function DashboardScreen() {
           <Card key={baby.id} style={{ marginTop: 20 }}>
             <Text className="font-jakarta-bold text-xl text-text-primary">{baby.firstName}{baby.lastName ? ` ${baby.lastName}` : ''}</Text>
             <Text className="mt-2 font-jakarta text-text-secondary">Born {new Date(baby.dateOfBirth).toLocaleDateString()}</Text>
+            <Button onPress={() => router.push({ pathname: '/expression', params: { babyId: baby.id } } as never)} style={{ marginTop: 16 }}>Check on {baby.firstName}</Button>
           </Card>
         ))}
         {!babies.isLoading && !babies.data?.length ? (

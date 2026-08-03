@@ -9,6 +9,7 @@ import { authRouter } from './routes/auth.routes.js';
 import { babyRouter } from './routes/baby.routes.js';
 import { chatRouter } from './routes/chat.routes.js';
 import { eventRouter } from './routes/event.routes.js';
+import { expressionRouter } from './routes/expression.routes.js';
 import { supportRouter } from './routes/support.routes.js';
 import { whatsappRouter } from './whatsapp/routes.js';
 
@@ -33,6 +34,7 @@ app.use('/api/babies', babyRouter);
 app.use('/api', whatsappRouter);
 app.use('/api', chatRouter);
 app.use('/api', eventRouter);
+app.use('/api', expressionRouter);
 app.use('/api', supportRouter);
 
 app.use((_request, _response, next) =>

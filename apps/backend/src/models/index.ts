@@ -1,6 +1,7 @@
 export { BabyModel } from './baby.model.js';
 export { ParentModel } from './parent.model.js';
 export { UserModel } from './user.model.js';
+export { ExpressionLogModel } from './expression-log.model.js';
 export {
   AIInsightModel,
   ConversationModel,
