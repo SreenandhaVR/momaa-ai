@@ -1,0 +1,110 @@
+{
+  "info": {
+    "name": "Momaa AI - Auth and Babies",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "babyId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Register",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"displayName\": \"Ava Parent\",\n  \"email\": \"ava@example.com\",\n  \"password\": \"secure-password-123\",\n  \"firstName\": \"Ava\",\n  \"timezone\": \"Asia/Kolkata\"\n}"
+        },
+        "url": "{{baseUrl}}/api/auth/register"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('accessToken', body.data.tokens.accessToken);",
+              "pm.collectionVariables.set('refreshToken', body.data.tokens.refreshToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"ava@example.com\",\n  \"password\": \"secure-password-123\"\n}"
+        },
+        "url": "{{baseUrl}}/api/auth/login"
+      }
+    },
+    {
+      "name": "Refresh token",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}" },
+        "url": "{{baseUrl}}/api/auth/refresh"
+      }
+    },
+    {
+      "name": "Create baby",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"firstName\": \"Noah\",\n  \"dateOfBirth\": \"2025-01-15T00:00:00.000Z\",\n  \"sex\": \"male\"\n}"
+        },
+        "url": "{{baseUrl}}/api/babies"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": ["pm.collectionVariables.set('babyId', pm.response.json().data.id);"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List babies",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": "{{baseUrl}}/api/babies"
+      }
+    },
+    {
+      "name": "Get baby",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": "{{baseUrl}}/api/babies/{{babyId}}"
+      }
+    },
+    {
+      "name": "Update baby",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"medicalNotes\": \"No known allergies.\"\n}" },
+        "url": "{{baseUrl}}/api/babies/{{babyId}}"
+      }
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "Momaa AI",
+    "slug": "momaa-ai",
+    "version": "0.1.0",
+    "scheme": "momaa-ai",
+    "userInterfaceStyle": "automatic",
+    "plugins": [
+      "expo-router",
+      "expo-notifications",
+      "expo-image-picker",
+      "expo-font",
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/types" },
+    { "path": "./packages/utils" },
+    { "path": "./packages/config" },
+    { "path": "./packages/shared" },
+    { "path": "./packages/ui" },
+    { "path": "./apps/backend" },
+    { "path": "./apps/mobile" }
+  ]
+}

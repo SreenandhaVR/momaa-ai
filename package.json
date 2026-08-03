@@ -1,0 +1,29 @@
+{
+  "name": "momaa-ai",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "dev": "corepack pnpm --parallel --filter @momaa/backend --filter @momaa/mobile dev",
+    "dev:backend": "corepack pnpm --filter @momaa/backend dev",
+    "dev:mobile": "corepack pnpm --filter @momaa/mobile dev",
+    "build": "corepack pnpm --filter @momaa/types build && corepack pnpm --filter @momaa/shared build && corepack pnpm --filter @momaa/backend build",
+    "typecheck": "tsc -b",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "@types/node": "^22.10.5",
+    "eslint": "^9.18.0",
+    "eslint-config-prettier": "^9.1.0",
+    "globals": "^15.14.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.20.0"
+  },
+  "dependencies": {
+    "cors": "^2.8.6"
+  }
+}
