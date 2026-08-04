@@ -5,6 +5,10 @@
     "version": "0.1.0",
     "scheme": "momaa-ai",
     "userInterfaceStyle": "automatic",
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
     "plugins": [
       "expo-router",
       "expo-notifications",
