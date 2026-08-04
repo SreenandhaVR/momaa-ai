@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "corepack pnpm --parallel --filter @momaa/backend --filter @momaa/mobile dev",
     "dev:backend": "corepack pnpm --filter @momaa/backend dev",

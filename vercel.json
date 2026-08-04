@@ -2,10 +2,9 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm --filter @momaa/types build && pnpm --filter @momaa/shared build && pnpm --filter @momaa/backend build",
+  "buildCommand": "pnpm run build",
   "functions": {
     "api/index.ts": {
-      "runtime": "nodejs22.x",
       "includeFiles": "apps/backend/dist/**"
     }
   },
