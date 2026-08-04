@@ -3,7 +3,7 @@
   "framework": null,
   "installCommand": "pnpm install --frozen-lockfile",
   "buildCommand": "pnpm run build",
-  "outputDirectory": null,
+  "outputDirectory": ".",
   "functions": {
     "api/index.ts": {
       "includeFiles": "apps/backend/dist/**"
