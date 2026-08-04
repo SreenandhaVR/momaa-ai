@@ -10,6 +10,7 @@
     "dev": "corepack pnpm --parallel --filter @momaa/backend --filter @momaa/mobile dev",
     "dev:backend": "corepack pnpm --filter @momaa/backend dev",
     "dev:mobile": "corepack pnpm --filter @momaa/mobile dev",
+    "check:whatsapp-subscription": "node scripts/check-whatsapp-subscription.js",
     "build": "corepack pnpm --filter @momaa/types build && corepack pnpm --filter @momaa/shared build && corepack pnpm --filter @momaa/backend build",
     "typecheck": "tsc -b",
     "lint": "eslint .",
