@@ -42,6 +42,37 @@ export const errorHandler: ErrorRequestHandler = (error, _request, response, _ne
     return;
   }
 
+  // Meta delivery failures are expected integration failures, not server crashes.
+  // Return a useful, safe response to clients while retaining the complete Meta
+  // response in the server logs emitted by the WhatsApp client.
+  if (
+    error instanceof Error &&
+    error.name === 'WhatsAppSendError' &&
+    'status' in error &&
+    typeof error.status === 'number'
+  ) {
+    const details = 'details' in error ? error.details : undefined;
+    console.error(
+      JSON.stringify({
+        scope: 'api.error',
+        event: 'whatsapp_delivery_failed',
+        status: error.status,
+        message: error.message,
+        details,
+        stack: error.stack
+      })
+    );
+    response.status(502).json({
+      error: {
+        code: 'WHATSAPP_DELIVERY_FAILED',
+        message:
+          'We could not send the WhatsApp verification code. Check the WhatsApp template and recipient configuration.',
+        ...(details === undefined ? {} : { details })
+      }
+    });
+    return;
+  }
+
   if (typeof error === 'object' && error !== null && 'code' in error && error.code === 11000) {
     response.status(409).json({
       error: {
