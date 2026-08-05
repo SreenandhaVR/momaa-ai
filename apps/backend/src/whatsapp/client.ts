@@ -1,6 +1,16 @@
 type Sender = (to: string, text: string) => Promise<void>;
 let senderForTesting: Sender | undefined;
 
+type MetaSendResponse = {
+  messages?: Array<{ id?: string }>;
+};
+
+export type WhatsAppSendResult = {
+  messageId?: string;
+  recipient: string;
+  status: number;
+};
+
 export class WhatsAppSendError extends Error {
   constructor(
     public readonly status: number,
@@ -17,38 +27,92 @@ function required(name: string): string {
   return value;
 }
 
+function maskToken(value?: string): string {
+  if (!value) return 'not configured';
+  if (value.length <= 8) return 'configured (masked)';
+  return `${value.slice(0, 4)}…${value.slice(-4)}`;
+}
+
+function configurationStatus(): Record<string, unknown> {
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
+  const businessAccountId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
+  return {
+    accessTokenConfigured: Boolean(accessToken),
+    accessTokenMasked: maskToken(accessToken),
+    phoneNumberId: phoneNumberId ?? 'not configured',
+    verifyTokenConfigured: Boolean(verifyToken),
+    businessAccountId: businessAccountId ?? 'not configured'
+  };
+}
+
 export function setWhatsAppSenderForTesting(sender?: Sender): void {
   senderForTesting = sender;
 }
-export async function sendWhatsAppMessage(to: string, text: string): Promise<void> {
-  if (senderForTesting) return senderForTesting(to, text);
+export async function sendWhatsAppMessage(to: string, text: string): Promise<WhatsAppSendResult> {
+  if (senderForTesting) {
+    await senderForTesting(to, text);
+    return { recipient: to, status: 200 };
+  }
+  console.info(
+    JSON.stringify({
+      scope: 'whatsapp.send',
+      event: 'configuration_checked',
+      environment: configurationStatus()
+    })
+  );
   const phoneNumberId = required('WHATSAPP_PHONE_NUMBER_ID');
   const accessToken = required('WHATSAPP_ACCESS_TOKEN');
   const recipient = to.replace(/\D/g, '');
   if (!recipient) throw new Error('A valid WhatsApp recipient phone number is required.');
+  const url = `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`;
+  const payload = {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to: recipient,
+    type: 'text',
+    text: { preview_url: false, body: text }
+  };
+
   console.info(
     JSON.stringify({
       scope: 'whatsapp.send',
-      event: 'request',
-      phoneNumberIdConfigured: Boolean(phoneNumberId),
-      accessTokenConfigured: Boolean(accessToken),
-      recipientLast4: recipient.slice(-4)
+      event: 'request_prepared',
+      url,
+      phoneNumberId,
+      recipientE164: `+${recipient}`,
+      payload,
+      headers: {
+        Authorization: `Bearer ${maskToken(accessToken)}`,
+        'Content-Type': 'application/json'
+      },
+      environment: configurationStatus()
     })
   );
-  const response = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      messaging_product: 'whatsapp',
-      recipient_type: 'individual',
-      to: recipient,
-      type: 'text',
-      text: { preview_url: false, body: text }
-    })
-  });
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        scope: 'whatsapp.send',
+        event: 'network_error',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      })
+    );
+    throw error;
+  }
+
   const responseText = await response.text();
   let details: unknown = responseText;
   try {
@@ -62,19 +126,22 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<voi
         scope: 'whatsapp.send',
         event: 'failed',
         status: response.status,
-        recipientLast4: recipient.slice(-4),
-        meta: details
+        recipientE164: `+${recipient}`,
+        response: details
       })
     );
     throw new WhatsAppSendError(response.status, details);
   }
+  const messageId = (details as MetaSendResponse | null)?.messages?.[0]?.id;
   console.info(
     JSON.stringify({
       scope: 'whatsapp.send',
       event: 'succeeded',
       status: response.status,
-      recipientLast4: recipient.slice(-4),
-      meta: details
+      recipientE164: `+${recipient}`,
+      messageId: messageId ?? null,
+      response: details
     })
   );
+  return { messageId, recipient, status: response.status };
 }

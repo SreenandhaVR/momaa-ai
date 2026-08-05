@@ -149,7 +149,7 @@ test('registers, authenticates, and manages a baby profile end-to-end', async ()
       ]
     });
   assert.equal(webhook.status, 200);
-  assert.equal(whatsappReplies.at(-1).text, 'Logged a 90 ml feed.');
+  assert.equal(whatsappReplies.at(-1).text, 'Logged feeding: 90 ml 🍼');
   const whatsappFeeds = await request(app)
     .get(`/api/babies/${babyId}/feeds`)
     .set('Authorization', `Bearer ${accessToken}`);
@@ -268,4 +268,43 @@ test('registers, authenticates, and manages a baby profile end-to-end', async ()
   const unauthorized = await request(app).get('/api/babies');
   assert.equal(unauthorized.status, 401);
   assert.equal(unauthorized.body.error.code, 'UNAUTHORIZED');
+});
+
+test('acknowledges an inbound webhook when Meta rejects the outbound reply', async () => {
+  setWhatsAppSenderForTesting(async () => {
+    throw new Error('Meta rejected the outbound message.');
+  });
+
+  try {
+    const webhook = await request(app)
+      .post('/api/webhook/whatsapp')
+      .send({
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  messages: [
+                    {
+                      from: '15551234567',
+                      type: 'text',
+                      text: { body: 'Fed 91ml' },
+                      timestamp: '1737046801'
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      });
+
+    assert.equal(webhook.status, 200);
+    const feeds = await request(app)
+      .get(`/api/babies/${babyId}/feeds`)
+      .set('Authorization', `Bearer ${accessToken}`);
+    assert.ok(feeds.body.data.some((feed) => feed.amountMl === 91));
+  } finally {
+    setWhatsAppSenderForTesting(async (to, text) => whatsappReplies.push({ to, text }));
+  }
 });

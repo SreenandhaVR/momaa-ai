@@ -24,7 +24,7 @@ function logMessage(
       scope: 'whatsapp.webhook',
       event,
       messageType: message.type,
-      senderLast4: message.from.slice(-4),
+      senderE164: `+${message.from}`,
       hasContent: Boolean(message.content),
       hasMedia: Boolean(message.mediaId),
       ...details
@@ -35,9 +35,13 @@ function logMessage(
 function describeError(error: unknown): Record<string, unknown> {
   if (error instanceof Error) {
     const details = 'details' in error ? error.details : undefined;
+    const validationErrors =
+      'errors' in error && typeof error.errors === 'object' ? error.errors : undefined;
     return {
       name: error.name,
       message: error.message,
+      stack: error.stack,
+      ...(validationErrors === undefined ? {} : { validationErrors }),
       ...(details === undefined ? {} : { details })
     };
   }
@@ -67,11 +71,17 @@ async function createEvent<T>(
   }
 }
 
-async function reply(message: IncomingWhatsAppMessage, text: string): Promise<void> {
+async function reply(message: IncomingWhatsAppMessage, text: string): Promise<boolean> {
+  if (!text.trim()) throw new Error('WhatsApp reply text must not be empty.');
+  logMessage(message, 'reply_generated', { reply: text });
   logMessage(message, 'outgoing_reply_attempted', { replyLength: text.length });
   try {
-    await sendWhatsAppMessage(message.from, text);
-    logMessage(message, 'outgoing_reply_succeeded');
+    const result = await sendWhatsAppMessage(message.from, text);
+    logMessage(message, 'outgoing_reply_succeeded', {
+      metaStatus: result.status,
+      messageId: result.messageId ?? null
+    });
+    return true;
   } catch (error) {
     console.error(
       JSON.stringify({
@@ -80,20 +90,27 @@ async function reply(message: IncomingWhatsAppMessage, text: string): Promise<vo
         ...describeError(error)
       })
     );
+    return false;
   }
 }
 
-async function handleMessage(message: IncomingWhatsAppMessage): Promise<void> {
-  logMessage(message, 'message_received');
+async function handleMessage(message: IncomingWhatsAppMessage): Promise<boolean> {
+  logMessage(message, 'message_received', { incomingText: message.content });
   const parent = await ParentModel.findOne({ phoneNumber: message.from });
-  logMessage(message, 'parent_lookup_completed', { found: Boolean(parent) });
+  logMessage(message, 'parent_lookup_completed', {
+    found: Boolean(parent),
+    familyId: parent ? String(parent._id) : null
+  });
   if (!parent)
     return reply(
       message,
       'I could not find a Momaa family linked to this WhatsApp number. Please finish onboarding in the Momaa app.'
     );
   const baby = await BabyModel.findOne({ parentIds: parent._id }).sort({ updatedAt: -1 });
-  logMessage(message, 'baby_lookup_completed', { found: Boolean(baby) });
+  logMessage(message, 'baby_lookup_completed', {
+    found: Boolean(baby),
+    babyId: baby ? String(baby._id) : null
+  });
   if (!baby)
     return reply(
       message,
@@ -112,12 +129,23 @@ async function handleMessage(message: IncomingWhatsAppMessage): Promise<void> {
         })
       );
     } catch (error) {
-      console.error('WhatsApp media processing failed:', error);
+      console.error(
+        JSON.stringify({
+          scope: 'whatsapp.webhook',
+          event: 'media_processing_failed',
+          ...describeError(error)
+        })
+      );
     }
   }
-  logMessage(message, 'intent_extraction_called');
+  logMessage(message, 'intent_extraction_called', { incomingText: message.content });
   const intent = parseWhatsAppIntent(message.content);
-  logMessage(message, 'intent_extraction_result', { intent: intent?.type ?? null });
+  logMessage(message, 'intent_extraction_result', {
+    detectedIntent: intent?.type ?? null,
+    parsedAmountMl: intent?.type === 'feed' ? intent.amountMl : null,
+    babyId: String(baby._id),
+    familyId: String(parent._id)
+  });
   if (intent?.type === 'feed') {
     await createEvent(message, 'feed', () =>
       createFeed({
@@ -128,7 +156,7 @@ async function handleMessage(message: IncomingWhatsAppMessage): Promise<void> {
         timestamp: message.timestamp
       })
     );
-    return reply(message, `Logged a ${intent.amountMl} ml feed.`);
+    return reply(message, `Logged feeding: ${intent.amountMl} ml 🍼`);
   }
   if (intent?.type === 'sleep_start') {
     await createEvent(message, 'sleep_start', () =>
@@ -199,7 +227,19 @@ whatsappRouter.get('/webhook/whatsapp', (request, response) => {
 });
 whatsappRouter.post('/webhook/whatsapp', async (request, response, next) => {
   try {
-    for (const message of parseWhatsAppWebhook(request.body)) await handleMessage(message);
+    const messages = parseWhatsAppWebhook(request.body);
+    console.info(
+      JSON.stringify({
+        scope: 'whatsapp.webhook',
+        event: 'webhook_received',
+        messageCount: messages.length
+      })
+    );
+    for (const message of messages) {
+      const outboundReplySent = await handleMessage(message);
+      logMessage(message, 'message_processing_completed', { outboundReplySent });
+    }
+    console.info(JSON.stringify({ scope: 'whatsapp.webhook', event: 'webhook_completed' }));
     response.sendStatus(200);
   } catch (error) {
     console.error(
