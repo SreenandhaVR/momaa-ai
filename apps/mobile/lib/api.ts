@@ -7,6 +7,16 @@ const defaultApiBaseUrl =
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? defaultApiBaseUrl;
 export type Tokens = { accessToken: string; refreshToken: string };
 
+export class ApiRequestError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number
+  ) {
+    super(message);
+    this.name = 'ApiRequestError';
+  }
+}
+
 /** SecureStore is native-only. Browsers use localStorage so Expo web can run too. */
 function webStorage(): Storage | undefined {
   return typeof window === 'undefined' ? undefined : window.localStorage;
@@ -49,6 +59,7 @@ export async function apiRequest<T>(
     }
   });
   const body = (await response.json().catch(() => null)) as T & { error?: { message?: string } };
-  if (!response.ok) throw new Error(body?.error?.message ?? 'Something went wrong.');
+  if (!response.ok)
+    throw new ApiRequestError(body?.error?.message ?? 'Something went wrong.', response.status);
   return body;
 }

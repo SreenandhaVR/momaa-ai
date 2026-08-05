@@ -1,4 +1,6 @@
+import dotenv from 'dotenv';
 import mongoose, { type Mongoose } from 'mongoose';
+import path from 'path';
 
 type MongooseCache = {
   connection: Mongoose | null;
@@ -14,9 +16,24 @@ const mongooseCache: MongooseCache = (globalForMongoose.__momaaMongoose ??= {
   promise: null
 });
 
-export async function connectDatabase(uri = process.env.MONGODB_URI): Promise<void> {
-  if (!uri) {
-    throw new Error('MONGODB_URI is required. Copy .env.example to .env and configure it.');
+function ensureEnvLoaded(): void {
+  if (!process.env.MONGODB_URI) {
+    dotenv.config({ path: path.resolve(process.cwd(), 'apps/backend/.env') });
+    dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+    dotenv.config();
+  }
+}
+
+export async function connectDatabase(uri?: string): Promise<void> {
+  ensureEnvLoaded();
+  const targetUri = uri || process.env.MONGODB_URI;
+
+  if (!targetUri) {
+    throw new Error(
+      'MONGODB_URI is required.\n' +
+      '• For local development: Copy apps/backend/.env.example to apps/backend/.env and set MONGODB_URI.\n' +
+      '• For Vercel deployment: Add MONGODB_URI in Vercel Project Settings > Environment Variables.'
+    );
   }
 
   if (mongooseCache.connection && mongoose.connection.readyState === 1) return;
@@ -29,7 +46,7 @@ export async function connectDatabase(uri = process.env.MONGODB_URI): Promise<vo
 
   if (!mongooseCache.promise) {
     mongooseCache.promise = mongoose
-      .connect(uri, {
+      .connect(targetUri, {
         connectTimeoutMS: 5_000,
         serverSelectionTimeoutMS: 5_000
       })
@@ -48,3 +65,4 @@ export async function disconnectDatabase(): Promise<void> {
   mongooseCache.connection = null;
   mongooseCache.promise = null;
 }
+

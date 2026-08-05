@@ -1,17 +1,19 @@
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
 export function Button({
   children,
   onPress,
   variant = 'primary',
   disabled,
+  loading,
   style
 }: {
   children: ReactNode;
   onPress?: () => void;
   variant?: 'primary' | 'secondary' | 'ghost';
   disabled?: boolean;
+  loading?: boolean;
   style?: ViewStyle;
 }) {
   return (
@@ -21,7 +23,14 @@ export function Button({
       onPress={onPress}
       style={[styles.base, styles[variant], disabled && styles.disabled, style]}
     >
-      <Text style={[styles.label, variant === 'ghost' && styles.ghostLabel]}>{children}</Text>
+      {loading ? (
+        <View style={styles.loadingContent}>
+          <ActivityIndicator color="#2C2C2C" size="small" />
+          <Text style={[styles.label, variant === 'ghost' && styles.ghostLabel]}>{children}</Text>
+        </View>
+      ) : (
+        <Text style={[styles.label, variant === 'ghost' && styles.ghostLabel]}>{children}</Text>
+      )}
     </Pressable>
   );
 }
@@ -43,5 +52,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1
   },
   ghostLabel: { color: '#6B7280' },
+  loadingContent: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   disabled: { opacity: 0.5 }
 });
