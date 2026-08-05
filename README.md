@@ -39,11 +39,11 @@ corepack pnpm dev:mobile --web --port 8082
 
 Open `http://localhost:3000/health` to verify the API and `http://localhost:8082` for the web app. For a physical phone on the same Wi-Fi, open Expo Go and enter `exp://<your-computer-LAN-IP>:8082`. The mobile app uses Expo SDK 54, which matches the current Expo Go release.
 
-For mobile authentication, copy [`apps/mobile/.env.example`](apps/mobile/.env.example) to `apps/mobile/.env` and set `EXPO_PUBLIC_API_BASE_URL` to your computer's LAN address for a physical phone. Browser sessions use local storage; Android and iOS use Expo Secure Store.
+For mobile authentication, create `apps/mobile/.env` and set `EXPO_PUBLIC_API_BASE_URL` to your computer's LAN address for a physical phone. Browser sessions use local storage; Android and iOS use Expo Secure Store.
 
 ## Backend authentication
 
-Copy [`apps/backend/.env.example`](apps/backend/.env.example) to `apps/backend/.env`, set `MONGODB_URI`, and replace both JWT secrets with long random values. Registration and login return a short-lived access token plus a refresh token. Send the access token as `Authorization: Bearer <accessToken>` to protected endpoints such as `/api/babies`.
+Create `apps/backend/.env`, set `MONGODB_URI`, and add long random values for `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET`. Registration and login return a short-lived access token plus a refresh token. Send the access token as `Authorization: Bearer <accessToken>` to protected endpoints such as `/api/babies`.
 
 ```sh
 curl -X POST http://localhost:3000/api/auth/register \
@@ -59,7 +59,7 @@ Set `AI_PROVIDER=openai` with `OPENAI_API_KEY` (and optionally `OPENAI_MODEL`) o
 
 ## WhatsApp webhook (local development)
 
-Configure the `WHATSAPP_*` and optional `CLOUDINARY_*` values in `apps/backend/.env` from the comments in `.env.example`. Start the API, then expose it with ngrok:
+Configure the `WHATSAPP_*` and optional `CLOUDINARY_*` values directly in `apps/backend/.env`. Start the API, then expose it with ngrok:
 
 ```sh
 pnpm dev:backend

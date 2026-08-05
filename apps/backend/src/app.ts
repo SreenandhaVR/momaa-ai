@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import cors from 'cors';
 import express from 'express';
 import type { Express } from 'express';
@@ -33,8 +32,9 @@ app.use('/api/auth', authRouter);
 app.use('/api/babies', babyRouter);
 app.use('/api', whatsappRouter);
 app.use('/api', chatRouter);
-app.use('/api', eventRouter);
+// This must precede the generic /babies/:babyId/:collection event route.
 app.use('/api', expressionRouter);
+app.use('/api', eventRouter);
 app.use('/api', supportRouter);
 
 app.use((_request, _response, next) =>

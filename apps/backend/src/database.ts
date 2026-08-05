@@ -18,9 +18,11 @@ const mongooseCache: MongooseCache = (globalForMongoose.__momaaMongoose ??= {
 
 function ensureEnvLoaded(): void {
   if (!process.env.MONGODB_URI) {
-    dotenv.config({ path: path.resolve(process.cwd(), 'apps/backend/.env') });
-    dotenv.config({ path: path.resolve(process.cwd(), '.env') });
-    dotenv.config();
+    const isRunningFromBackendPackage = path.basename(process.cwd()) === 'backend';
+    const backendEnvPath = isRunningFromBackendPackage
+      ? path.resolve(process.cwd(), '.env')
+      : path.resolve(process.cwd(), 'apps/backend/.env');
+    dotenv.config({ path: backendEnvPath });
   }
 }
 
@@ -31,7 +33,7 @@ export async function connectDatabase(uri?: string): Promise<void> {
   if (!targetUri) {
     throw new Error(
       'MONGODB_URI is required.\n' +
-      '• For local development: Copy apps/backend/.env.example to apps/backend/.env and set MONGODB_URI.\n' +
+      '• For local development: Create apps/backend/.env and set MONGODB_URI.\n' +
       '• For Vercel deployment: Add MONGODB_URI in Vercel Project Settings > Environment Variables.'
     );
   }
@@ -65,4 +67,3 @@ export async function disconnectDatabase(): Promise<void> {
   mongooseCache.connection = null;
   mongooseCache.promise = null;
 }
-
