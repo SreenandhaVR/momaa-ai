@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { BabyModel, ParentModel, SleepModel } from '../models/index.js';
+import { findVerifiedWhatsAppLink } from '../services/whatsapp-link.service.js';
 import { buildRecentBabySummary } from '../ai/context.js';
 import { respondToBabyChat } from '../services/chat.service.js';
 import {
@@ -12,6 +13,7 @@ import {
 import { sendWhatsAppMessage } from './client.js';
 import { parseWhatsAppIntent } from './intents.js';
 import { uploadWhatsAppMediaToCloudinary } from './media.js';
+import { metaSenderToE164 } from './phone.js';
 import { parseWhatsAppWebhook, type IncomingWhatsAppMessage } from './parser.js';
 
 function logMessage(
@@ -96,7 +98,19 @@ async function reply(message: IncomingWhatsAppMessage, text: string): Promise<bo
 
 async function handleMessage(message: IncomingWhatsAppMessage): Promise<boolean> {
   logMessage(message, 'message_received', { incomingText: message.content });
-  const parent = await ParentModel.findOne({ phoneNumber: message.from });
+  const phoneE164 = metaSenderToE164(message.from);
+  const link = await findVerifiedWhatsAppLink(phoneE164);
+  logMessage(message, 'whatsapp_link_lookup_completed', {
+    phoneE164,
+    found: Boolean(link),
+    verified: link?.status === 'verified'
+  });
+  if (!link)
+    return reply(
+      message,
+      'Your WhatsApp number is not linked to Momaa yet. Open Momaa, go to Profile, and link this number to start logging updates.'
+    );
+  const parent = await ParentModel.findOne({ _id: link.parentId, userId: link.userId });
   logMessage(message, 'parent_lookup_completed', {
     found: Boolean(parent),
     familyId: parent ? String(parent._id) : null
@@ -104,7 +118,7 @@ async function handleMessage(message: IncomingWhatsAppMessage): Promise<boolean>
   if (!parent)
     return reply(
       message,
-      'I could not find a Momaa family linked to this WhatsApp number. Please finish onboarding in the Momaa app.'
+      'Your linked Momaa account is no longer available. Please relink your WhatsApp number from the Momaa app.'
     );
   const baby = await BabyModel.findOne({ parentIds: parent._id }).sort({ updatedAt: -1 });
   logMessage(message, 'baby_lookup_completed', {

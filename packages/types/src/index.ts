@@ -37,6 +37,13 @@ export interface Parent extends Entity {
   timezone: string;
 }
 
+export interface WhatsAppLink extends Entity {
+  phoneNumber: string;
+  status: 'pending' | 'verified';
+  verifiedAt?: ISODateString;
+  verificationExpiresAt?: ISODateString;
+}
+
 export interface Baby extends Entity {
   parentIds: EntityId[];
   firstName: string;

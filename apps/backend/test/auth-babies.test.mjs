@@ -13,6 +13,7 @@ const { app } = await import('../dist/app.js');
 const { connectDatabase, disconnectDatabase } = await import('../dist/database.js');
 const { setAIProviderForTesting } = await import('../dist/ai/provider.js');
 const { setWhatsAppSenderForTesting } = await import('../dist/whatsapp/client.js');
+const { WhatsAppLinkModel } = await import('../dist/models/index.js');
 
 let mongo;
 let accessToken = '';
@@ -63,6 +64,14 @@ test('registers, authenticates, and manages a baby profile end-to-end', async ()
   assert.ok(register.body.data.parent.id);
   accessToken = register.body.data.tokens.accessToken;
   refreshToken = register.body.data.tokens.refreshToken;
+  await WhatsAppLinkModel.create({
+    userId: register.body.data.user.id,
+    parentId: register.body.data.parent.id,
+    phoneE164: '+15551234567',
+    status: 'verified',
+    verifiedAt: new Date(),
+    verificationAttempts: 0
+  });
 
   const login = await request(app)
     .post('/api/auth/login')

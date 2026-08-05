@@ -59,14 +59,16 @@ Set `AI_PROVIDER=openai` with `OPENAI_API_KEY` (and optionally `OPENAI_MODEL`) o
 
 ## WhatsApp webhook (local development)
 
-Configure the `WHATSAPP_*` and optional `CLOUDINARY_*` values directly in `apps/backend/.env`. Start the API, then expose it with ngrok:
+Configure the `WHATSAPP_*` and optional `CLOUDINARY_*` values directly in `apps/backend/.env`. For account linking, also configure `WHATSAPP_VERIFICATION_TEMPLATE_NAME` with an approved Meta WhatsApp template containing one body variable (`{{1}}`), and optionally `WHATSAPP_VERIFICATION_TEMPLATE_LANGUAGE` (defaults to `en_US`). Start the API, then expose it with ngrok:
 
 ```sh
 pnpm dev:backend
 ngrok http 3000
 ```
 
-Set Meta's Callback URL to `https://<your-ngrok-domain>/api/webhook/whatsapp`, set the same verification token in Meta and `WHATSAPP_VERIFY_TOKEN`, and subscribe to the `messages` webhook field. The endpoint returns Meta's verification challenge on a valid GET request. Send a message such as `Fed 90ml` to the Meta test number from the WhatsApp number stored on the Parent profile; Momaa logs the feed and replies to the sender.
+Set Meta's Callback URL to `https://<your-ngrok-domain>/api/webhook/whatsapp`, set the same verification token in Meta and `WHATSAPP_VERIFY_TOKEN`, and subscribe to the `messages` webhook field. The endpoint returns Meta's verification challenge on a valid GET request.
+
+Users still register with email and password. To enable WhatsApp, they open **Profile**, enter their number in E.164 format (for example `+919876543210`), receive a Meta template verification code, and submit it in the app. Only verified records in the `WhatsAppLink` collection are accepted by the webhook. This keeps WhatsApp identities globally unique and allows additional caregivers to link their own Momaa accounts to the same baby through the existing `Baby.parentIds` relationship.
 
 ## Workspace packages
 

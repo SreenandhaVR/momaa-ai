@@ -5,6 +5,22 @@ type MetaSendResponse = {
   messages?: Array<{ id?: string }>;
 };
 
+type WhatsAppPayload = {
+  messaging_product: 'whatsapp';
+  recipient_type: 'individual';
+  to: string;
+  type: 'text' | 'template';
+  text?: { preview_url: false; body: string };
+  template?: {
+    name: string;
+    language: { code: string };
+    components: Array<{
+      type: 'body';
+      parameters: Array<{ type: 'text'; text: string }>;
+    }>;
+  };
+};
+
 export type WhatsAppSendResult = {
   messageId?: string;
   recipient: string;
@@ -38,20 +54,40 @@ function configurationStatus(): Record<string, unknown> {
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
   const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
   const businessAccountId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
+  const verificationTemplateName = process.env.WHATSAPP_VERIFICATION_TEMPLATE_NAME;
   return {
     accessTokenConfigured: Boolean(accessToken),
     accessTokenMasked: maskToken(accessToken),
     phoneNumberId: phoneNumberId ?? 'not configured',
     verifyTokenConfigured: Boolean(verifyToken),
-    businessAccountId: businessAccountId ?? 'not configured'
+    businessAccountId: businessAccountId ?? 'not configured',
+    verificationTemplateConfigured: Boolean(verificationTemplateName)
+  };
+}
+
+function payloadForLogs(payload: WhatsAppPayload): WhatsAppPayload {
+  if (payload.type !== 'template') return payload;
+  return {
+    ...payload,
+    template: payload.template
+      ? {
+          ...payload.template,
+          components: payload.template.components.map((component) => ({
+            ...component,
+            parameters: component.parameters.map((parameter) => ({ ...parameter, text: '[redacted]' }))
+          }))
+        }
+      : undefined
   };
 }
 
 export function setWhatsAppSenderForTesting(sender?: Sender): void {
   senderForTesting = sender;
 }
-export async function sendWhatsAppMessage(to: string, text: string): Promise<WhatsAppSendResult> {
+
+async function sendWhatsAppPayload(to: string, payload: Omit<WhatsAppPayload, 'to'>): Promise<WhatsAppSendResult> {
   if (senderForTesting) {
+    const text = payload.type === 'text' ? payload.text?.body ?? '' : '[WhatsApp verification template]';
     await senderForTesting(to, text);
     return { recipient: to, status: 200 };
   }
@@ -67,13 +103,7 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<Wha
   const recipient = to.replace(/\D/g, '');
   if (!recipient) throw new Error('A valid WhatsApp recipient phone number is required.');
   const url = `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`;
-  const payload = {
-    messaging_product: 'whatsapp',
-    recipient_type: 'individual',
-    to: recipient,
-    type: 'text',
-    text: { preview_url: false, body: text }
-  };
+  const requestPayload: WhatsAppPayload = { ...payload, to: recipient };
 
   console.info(
     JSON.stringify({
@@ -82,7 +112,7 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<Wha
       url,
       phoneNumberId,
       recipientE164: `+${recipient}`,
-      payload,
+      payload: payloadForLogs(requestPayload),
       headers: {
         Authorization: `Bearer ${maskToken(accessToken)}`,
         'Content-Type': 'application/json'
@@ -99,7 +129,7 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<Wha
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(requestPayload)
     });
   } catch (error) {
     console.error(
@@ -144,4 +174,32 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<Wha
     })
   );
   return { messageId, recipient, status: response.status };
+}
+
+export async function sendWhatsAppMessage(to: string, text: string): Promise<WhatsAppSendResult> {
+  return sendWhatsAppPayload(to, {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    type: 'text',
+    text: { preview_url: false, body: text }
+  });
+}
+
+/** Sends an approved Meta template so verification also works outside the 24-hour conversation window. */
+export async function sendWhatsAppVerificationCode(
+  to: string,
+  code: string
+): Promise<WhatsAppSendResult> {
+  const templateName = required('WHATSAPP_VERIFICATION_TEMPLATE_NAME');
+  const language = process.env.WHATSAPP_VERIFICATION_TEMPLATE_LANGUAGE ?? 'en_US';
+  return sendWhatsAppPayload(to, {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    type: 'template',
+    template: {
+      name: templateName,
+      language: { code: language },
+      components: [{ type: 'body', parameters: [{ type: 'text', text: code }] }]
+    }
+  });
 }

@@ -10,6 +10,7 @@ import { chatRouter } from './routes/chat.routes.js';
 import { eventRouter } from './routes/event.routes.js';
 import { expressionRouter } from './routes/expression.routes.js';
 import { supportRouter } from './routes/support.routes.js';
+import { whatsappLinkRouter } from './routes/whatsapp-link.routes.js';
 import { whatsappRouter } from './whatsapp/routes.js';
 
 export const app: Express = express();
@@ -30,6 +31,7 @@ app.get('/health', (_request, response) => {
 
 app.use('/api/auth', authRouter);
 app.use('/api/babies', babyRouter);
+app.use('/api/whatsapp-links', whatsappLinkRouter);
 app.use('/api', whatsappRouter);
 app.use('/api', chatRouter);
 // This must precede the generic /babies/:babyId/:collection event route.
