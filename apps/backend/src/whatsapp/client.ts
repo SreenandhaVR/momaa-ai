@@ -24,13 +24,15 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<voi
   if (senderForTesting) return senderForTesting(to, text);
   const phoneNumberId = required('WHATSAPP_PHONE_NUMBER_ID');
   const accessToken = required('WHATSAPP_ACCESS_TOKEN');
+  const recipient = to.replace(/\D/g, '');
+  if (!recipient) throw new Error('A valid WhatsApp recipient phone number is required.');
   console.info(
     JSON.stringify({
       scope: 'whatsapp.send',
       event: 'request',
       phoneNumberIdConfigured: Boolean(phoneNumberId),
       accessTokenConfigured: Boolean(accessToken),
-      recipientLast4: to.slice(-4)
+      recipientLast4: recipient.slice(-4)
     })
   );
   const response = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
@@ -42,7 +44,7 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<voi
     body: JSON.stringify({
       messaging_product: 'whatsapp',
       recipient_type: 'individual',
-      to,
+      to: recipient,
       type: 'text',
       text: { preview_url: false, body: text }
     })
@@ -60,7 +62,7 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<voi
         scope: 'whatsapp.send',
         event: 'failed',
         status: response.status,
-        recipientLast4: to.slice(-4),
+        recipientLast4: recipient.slice(-4),
         meta: details
       })
     );
@@ -71,7 +73,7 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<voi
       scope: 'whatsapp.send',
       event: 'succeeded',
       status: response.status,
-      recipientLast4: to.slice(-4),
+      recipientLast4: recipient.slice(-4),
       meta: details
     })
   );

@@ -80,19 +80,20 @@ async function reply(message: IncomingWhatsAppMessage, text: string): Promise<vo
         ...describeError(error)
       })
     );
-    throw error;
   }
 }
 
 async function handleMessage(message: IncomingWhatsAppMessage): Promise<void> {
   logMessage(message, 'message_received');
   const parent = await ParentModel.findOne({ phoneNumber: message.from });
+  logMessage(message, 'parent_lookup_completed', { found: Boolean(parent) });
   if (!parent)
     return reply(
       message,
       'I could not find a Momaa family linked to this WhatsApp number. Please finish onboarding in the Momaa app.'
     );
   const baby = await BabyModel.findOne({ parentIds: parent._id }).sort({ updatedAt: -1 });
+  logMessage(message, 'baby_lookup_completed', { found: Boolean(baby) });
   if (!baby)
     return reply(
       message,
