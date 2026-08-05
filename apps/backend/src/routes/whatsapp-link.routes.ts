@@ -9,6 +9,7 @@ import {
   updateWhatsAppLink,
   verifyWhatsAppLink
 } from '../services/whatsapp-link.service.js';
+import { createWhatsAppPairingCode } from '../services/whatsapp-pairing.service.js';
 import { validateBody } from '../validation.js';
 
 const phoneNumberBody = z.object({ phoneNumber: z.string().trim().min(8).max(30) }).strict();
@@ -45,6 +46,23 @@ whatsappLinkRouter.get(
       parentId: request.auth!.parentId
     }).sort({ createdAt: -1 });
     response.json({ data: links.map(serializeLink) });
+  })
+);
+
+/**
+ * Generates a short-lived code that the caregiver sends from WhatsApp as
+ * `link 123456`. This avoids sending an outbound OTP template during MVP use.
+ */
+whatsappLinkRouter.post(
+  '/pairing-code',
+  asyncHandler(async (request, response) => {
+    const pairing = await createWhatsAppPairingCode({
+      userId: request.auth!.userId,
+      parentId: request.auth!.parentId
+    });
+    response.status(201).json({
+      data: { code: pairing.code, expiresAt: pairing.expiresAt.toISOString() }
+    });
   })
 );
 

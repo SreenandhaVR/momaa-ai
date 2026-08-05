@@ -1,6 +1,8 @@
 import { Router } from 'express';
+import { ApiError } from '../errors.js';
 import { BabyModel, ParentModel, SleepModel } from '../models/index.js';
 import { findVerifiedWhatsAppLink } from '../services/whatsapp-link.service.js';
+import { claimWhatsAppPairingCode } from '../services/whatsapp-pairing.service.js';
 import { buildRecentBabySummary } from '../ai/context.js';
 import { respondToBabyChat } from '../services/chat.service.js';
 import {
@@ -99,6 +101,25 @@ async function reply(message: IncomingWhatsAppMessage, text: string): Promise<bo
 async function handleMessage(message: IncomingWhatsAppMessage): Promise<boolean> {
   logMessage(message, 'message_received', { incomingText: message.content });
   const phoneE164 = metaSenderToE164(message.from);
+  const pairingMatch = message.content?.trim().match(/^link\s+(\d{6})$/i);
+  if (pairingMatch) {
+    logMessage(message, 'pairing_code_received');
+    try {
+      const link = await claimWhatsAppPairingCode({ code: pairingMatch[1], phoneE164 });
+      logMessage(message, 'pairing_succeeded', { parentId: String(link.parentId), phoneE164 });
+      return reply(message, 'Your WhatsApp number is linked to Momaa. You can now send updates such as “fed 90ml”.');
+    } catch (error) {
+      console.error(
+        JSON.stringify({ scope: 'whatsapp.webhook', event: 'pairing_failed', ...describeError(error) })
+      );
+      return reply(
+        message,
+        error instanceof ApiError
+          ? error.message
+          : 'I could not link this number. Create a new pairing code in Momaa and try again.'
+      );
+    }
+  }
   const link = await findVerifiedWhatsAppLink(phoneE164);
   logMessage(message, 'whatsapp_link_lookup_completed', {
     phoneE164,
