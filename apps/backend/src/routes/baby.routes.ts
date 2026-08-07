@@ -1,10 +1,20 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { z } from 'zod';
 import { requireAuth } from '../auth.js';
 import { ApiError, asyncHandler } from '../errors.js';
-import { BabyModel, ParentModel } from '../models/index.js';
+import {
+  AIInsightModel,
+  BabyModel,
+  GrowthModel,
+  MemoryModel,
+  ParentModel,
+  TimelineEventModel,
+  VaccinationModel
+} from '../models/index.js';
 import { serializeBaby } from '../serializers.js';
 import { buildRhythm } from '../services/rhythm.service.js';
+import { uploadImageToCloudinary, uploadToCloudinary } from '../services/cloudinary.service.js';
 import { validateBody } from '../validation.js';
 
 const babyFields = {
@@ -30,6 +40,15 @@ const updateBabyBody = z
 
 export const babyRouter: Router = Router();
 babyRouter.use(requireAuth);
+const photoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_request, file, callback) => callback(null, file.mimetype.startsWith('image/'))
+});
+const mediaUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }
+});
 
 babyRouter.get(
   '/',
@@ -64,6 +83,48 @@ babyRouter.post(
   })
 );
 
+babyRouter.post(
+  '/:id/photo',
+  photoUpload.single('photo'),
+  asyncHandler(async (request, response) => {
+    if (!request.file) throw new ApiError(400, 'VALIDATION_ERROR', 'An image file is required.');
+    const baby = await BabyModel.findOne({
+      _id: request.params.id,
+      parentIds: request.auth!.parentId
+    });
+    if (!baby) throw new ApiError(404, 'NOT_FOUND', 'Baby profile not found.');
+    baby.photoUrl = await uploadImageToCloudinary(request.file.buffer, request.file.mimetype);
+    await baby.save();
+    response.json({ data: serializeBaby(baby) });
+  })
+);
+
+babyRouter.post(
+  '/:id/media',
+  mediaUpload.single('media'),
+  asyncHandler(async (request, response) => {
+    if (!request.file)
+      throw new ApiError(400, 'VALIDATION_ERROR', 'A photo or voice note is required.');
+    if (!request.file.mimetype.startsWith('image/') && !request.file.mimetype.startsWith('audio/'))
+      throw new ApiError(400, 'VALIDATION_ERROR', 'Only images and audio are supported.');
+    const baby = await BabyModel.findOne({
+      _id: request.params.id,
+      parentIds: request.auth!.parentId
+    });
+    if (!baby) throw new ApiError(404, 'NOT_FOUND', 'Baby profile not found.');
+    const mediaUrl = await uploadToCloudinary(request.file.buffer, request.file.mimetype, 'auto');
+    const title = request.file.mimetype.startsWith('audio/') ? 'Voice note' : 'Photo memory';
+    const memory = await MemoryModel.create({
+      babyId: baby._id,
+      title,
+      mediaUrls: [mediaUrl],
+      occurredAt: new Date(),
+      source: 'app'
+    });
+    response.status(201).json({ data: { id: String(memory._id), title, mediaUrl } });
+  })
+);
+
 babyRouter.get(
   '/:babyId/rhythm',
   asyncHandler(async (request, response) => {
@@ -79,6 +140,44 @@ babyRouter.get(
       timeZone: parent?.timezone ?? 'UTC'
     });
     response.json({ data: rhythm.insights, meta: { feedingFrequency: rhythm.feedingFrequency } });
+  })
+);
+
+babyRouter.get(
+  '/:babyId/dashboard',
+  asyncHandler(async (request, response) => {
+    const baby = await BabyModel.findOne({
+      _id: request.params.babyId,
+      parentIds: request.auth!.parentId
+    });
+    if (!baby) throw new ApiError(404, 'NOT_FOUND', 'Baby profile not found.');
+    const [insight, vaccinations, growth, timeline] = await Promise.all([
+      AIInsightModel.findOne({ babyId: baby._id }).sort({ generatedAt: -1 }),
+      VaccinationModel.find({ babyId: baby._id, nextDueAt: { $gte: new Date() } })
+        .sort({ nextDueAt: 1 })
+        .limit(3),
+      GrowthModel.find({ babyId: baby._id }).sort({ recordedAt: -1 }).limit(2),
+      TimelineEventModel.find({ babyId: baby._id }).sort({ occurredAt: -1 }).limit(3)
+    ]);
+    const serialize = (value: { _id: unknown; toObject: () => Record<string, unknown> } | null) => {
+      if (!value) return null;
+      const raw = value.toObject();
+      return Object.fromEntries(
+        Object.entries(raw).map(([key, item]) => [
+          key === '_id' ? 'id' : key,
+          item instanceof Date ? item.toISOString() : key === '_id' ? String(item) : item
+        ])
+      );
+    };
+    response.json({
+      data: {
+        baby: serializeBaby(baby),
+        insight: serialize(insight),
+        upcomingVaccinations: vaccinations.map(serialize),
+        growth: growth.map(serialize),
+        recentTimeline: timeline.map(serialize)
+      }
+    });
   })
 );
 
