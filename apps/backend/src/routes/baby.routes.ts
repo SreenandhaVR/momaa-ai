@@ -4,6 +4,7 @@ import { requireAuth } from '../auth.js';
 import { ApiError, asyncHandler } from '../errors.js';
 import { BabyModel, ParentModel } from '../models/index.js';
 import { serializeBaby } from '../serializers.js';
+import { buildRhythm } from '../services/rhythm.service.js';
 import { validateBody } from '../validation.js';
 
 const babyFields = {
@@ -60,6 +61,24 @@ babyRouter.post(
       throw error;
     }
     response.status(201).json({ data: serializeBaby(baby) });
+  })
+);
+
+babyRouter.get(
+  '/:babyId/rhythm',
+  asyncHandler(async (request, response) => {
+    const baby = await BabyModel.findOne({
+      _id: request.params.babyId,
+      parentIds: request.auth!.parentId
+    });
+    if (!baby) throw new ApiError(404, 'NOT_FOUND', 'Baby profile not found.');
+    const parent = await ParentModel.findById(request.auth!.parentId).select('timezone');
+    const rhythm = await buildRhythm({
+      babyId: String(baby._id),
+      babyName: baby.firstName,
+      timeZone: parent?.timezone ?? 'UTC'
+    });
+    response.json({ data: rhythm.insights, meta: { feedingFrequency: rhythm.feedingFrequency } });
   })
 );
 

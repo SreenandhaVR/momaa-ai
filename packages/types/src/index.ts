@@ -203,4 +203,24 @@ export interface RhythmSample {
   recordedAt: ISODateString;
 }
 
+export type RhythmConfidenceLevel = 'learning' | 'low' | 'medium' | 'high' | 'very_high';
+export type RhythmInsightType = 'feeding' | 'sleep' | 'active_hours' | 'growth';
+
+export interface RhythmInsight {
+  type: RhythmInsightType;
+  insight: string;
+  confidenceLevel: RhythmConfidenceLevel;
+  dataPointCount: number;
+}
+
+export interface FeedingFrequencyPoint {
+  date: ISODateString;
+  count: number;
+}
+
+export interface RhythmResponse {
+  data: RhythmInsight[];
+  meta: { feedingFrequency: FeedingFrequencyPoint[] };
+}
+
 export type HealthStatus = 'ok';

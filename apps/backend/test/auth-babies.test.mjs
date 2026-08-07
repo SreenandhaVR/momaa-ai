@@ -297,6 +297,47 @@ test('registers, authenticates, and manages a baby profile end-to-end', async ()
   assert.equal(sleepEnd.status, 200);
   assert.equal(sleepEnd.body.data.durationMinutes, 90);
 
+  // Spread entries across recent days so rhythm is derived from data, not static copy.
+  for (let daysAgo = 1; daysAgo <= 4; daysAgo += 1) {
+    const day = new Date(Date.now() - daysAgo * 86_400_000);
+    for (const hour of [8, 12, 16]) {
+      const timestamp = new Date(day);
+      timestamp.setHours(hour, 0, 0, 0);
+      const feed = await request(app)
+        .post(`/api/babies/${babyId}/feeds`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          method: 'bottle',
+          amountMl: 90,
+          timestamp: timestamp.toISOString(),
+          source: 'app'
+        });
+      assert.equal(feed.status, 201);
+    }
+    const sleepStart = new Date(day);
+    sleepStart.setHours(20, daysAgo % 2 === 0 ? 0 : 20, 0, 0);
+    const sleep = await request(app)
+      .post(`/api/babies/${babyId}/sleeps`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        startTime: sleepStart.toISOString(),
+        endTime: new Date(sleepStart.getTime() + 60 * 60 * 1_000).toISOString(),
+        isActive: false,
+        source: 'app'
+      });
+    assert.equal(sleep.status, 201);
+  }
+  const rhythm = await request(app)
+    .get(`/api/babies/${babyId}/rhythm`)
+    .set('Authorization', `Bearer ${accessToken}`);
+  assert.equal(rhythm.status, 200);
+  assert.equal(rhythm.body.data.length, 4);
+  const feedingRhythm = rhythm.body.data.find((insight) => insight.type === 'feeding');
+  assert.equal(feedingRhythm.confidenceLevel, 'low');
+  assert.ok(feedingRhythm.dataPointCount >= 12);
+  assert.match(feedingRhythm.insight, /feeding/i);
+  assert.equal(rhythm.body.meta.feedingFrequency.length, 7);
+
   const unauthorized = await request(app).get('/api/babies');
   assert.equal(unauthorized.status, 401);
   assert.equal(unauthorized.body.error.code, 'UNAUTHORIZED');
