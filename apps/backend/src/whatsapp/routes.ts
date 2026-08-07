@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { ApiError } from '../errors.js';
 import { BabyModel, ParentModel, SleepModel } from '../models/index.js';
-import { findVerifiedWhatsAppLink } from '../services/whatsapp-link.service.js';
+import { findWhatsAppLink } from '../services/whatsapp-link.service.js';
 import { claimWhatsAppPairingCode } from '../services/whatsapp-pairing.service.js';
 import { buildRecentBabySummary } from '../ai/context.js';
 import { respondToBabyChat } from '../services/chat.service.js';
@@ -107,10 +107,17 @@ async function handleMessage(message: IncomingWhatsAppMessage): Promise<boolean>
     try {
       const link = await claimWhatsAppPairingCode({ code: pairingMatch[1], phoneE164 });
       logMessage(message, 'pairing_succeeded', { parentId: String(link.parentId), phoneE164 });
-      return reply(message, 'Your WhatsApp number is linked to Momaa. You can now send updates such as “fed 90ml”.');
+      return reply(
+        message,
+        'Your WhatsApp number is linked to Momaa. You can now send updates such as “fed 90ml”.'
+      );
     } catch (error) {
       console.error(
-        JSON.stringify({ scope: 'whatsapp.webhook', event: 'pairing_failed', ...describeError(error) })
+        JSON.stringify({
+          scope: 'whatsapp.webhook',
+          event: 'pairing_failed',
+          ...describeError(error)
+        })
       );
       return reply(
         message,
@@ -120,17 +127,29 @@ async function handleMessage(message: IncomingWhatsAppMessage): Promise<boolean>
       );
     }
   }
-  const link = await findVerifiedWhatsAppLink(phoneE164);
+  const link = await findWhatsAppLink(phoneE164);
   logMessage(message, 'whatsapp_link_lookup_completed', {
     phoneE164,
     found: Boolean(link),
     verified: link?.status === 'verified'
   });
-  if (!link)
+  if (!link) {
+    logMessage(message, 'parent_lookup_completed', { found: false, reason: 'number_not_linked' });
     return reply(
       message,
-      'Your WhatsApp number is not linked to Momaa yet. Open Momaa, go to Profile, and link this number to start logging updates.'
+      "This number isn't linked to a Momaa account yet — open the app and link your WhatsApp number in Profile settings to get started."
     );
+  }
+  if (link.status !== 'verified') {
+    logMessage(message, 'unverified_number_blocked', {
+      phoneE164,
+      parentId: String(link.parentId)
+    });
+    return reply(
+      message,
+      'Your WhatsApp number is pending verification. Open Momaa Profile and enter the verification code we sent.'
+    );
+  }
   const parent = await ParentModel.findOne({ _id: link.parentId, userId: link.userId });
   logMessage(message, 'parent_lookup_completed', {
     found: Boolean(parent),
@@ -141,6 +160,16 @@ async function handleMessage(message: IncomingWhatsAppMessage): Promise<boolean>
       message,
       'Your linked Momaa account is no longer available. Please relink your WhatsApp number from the Momaa app.'
     );
+  if (!parent.isPhoneVerified) {
+    logMessage(message, 'unverified_parent_phone_blocked', {
+      phoneE164,
+      parentId: String(parent._id)
+    });
+    return reply(
+      message,
+      'Your WhatsApp number needs verification in Momaa Profile before it can log health updates.'
+    );
+  }
   const baby = await BabyModel.findOne({ parentIds: parent._id }).sort({ updatedAt: -1 });
   logMessage(message, 'baby_lookup_completed', {
     found: Boolean(baby),

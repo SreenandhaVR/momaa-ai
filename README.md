@@ -68,7 +68,7 @@ ngrok http 3000
 
 Set Meta's Callback URL to `https://<your-ngrok-domain>/api/webhook/whatsapp`, set the same verification token in Meta and `WHATSAPP_VERIFY_TOKEN`, and subscribe to the `messages` webhook field. The endpoint returns Meta's verification challenge on a valid GET request.
 
-Users still register with email and password. To enable WhatsApp, they open **Profile**, enter their number in E.164 format (for example `+919876543210`), receive a Meta template verification code, and submit it in the app. Only verified records in the `WhatsAppLink` collection are accepted by the webhook. This keeps WhatsApp identities globally unique and allows additional caregivers to link their own Momaa accounts to the same baby through the existing `Baby.parentIds` relationship.
+Users still register with email and password. To enable WhatsApp, they open **Profile**, enter their number in E.164 format (for example `+919876543210`), receive a Meta template verification code, and submit it in the app. `POST /api/parents/me/phone` starts or restarts verification; `POST /api/parents/me/phone/verify` accepts `{ "code": "123456" }`. The parent record stores the number as digits only (`919876543210`) and records its verification state. Only verified numbers are accepted by the webhook, which keeps WhatsApp identities globally unique and prevents unverified numbers from logging baby health events.
 
 ## Workspace packages
 

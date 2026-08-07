@@ -79,7 +79,9 @@ authRouter.post(
         firstName,
         lastName,
         relationshipToBaby,
-        phoneNumber: phoneNumber?.replace(/\D/g, ''),
+        // A login phone is not automatically a WhatsApp identity. It is linked
+        // and verified explicitly through /parents/me/phone.
+        isPhoneVerified: false,
         timezone,
         babyIds: []
       });

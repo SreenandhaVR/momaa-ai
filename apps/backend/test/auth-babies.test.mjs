@@ -8,12 +8,12 @@ process.env.JWT_REFRESH_SECRET = 'test-refresh-secret-that-is-long-enough';
 process.env.JWT_ACCESS_EXPIRES_IN = '15m';
 process.env.JWT_REFRESH_EXPIRES_IN = '7d';
 process.env.WHATSAPP_VERIFY_TOKEN = 'test-whatsapp-verify-token';
+process.env.WHATSAPP_VERIFICATION_TEMPLATE_NAME = 'momaa_verification';
 
 const { app } = await import('../dist/app.js');
 const { connectDatabase, disconnectDatabase } = await import('../dist/database.js');
 const { setAIProviderForTesting } = await import('../dist/ai/provider.js');
 const { setWhatsAppSenderForTesting } = await import('../dist/whatsapp/client.js');
-const { WhatsAppLinkModel } = await import('../dist/models/index.js');
 
 let mongo;
 let accessToken = '';
@@ -64,14 +64,37 @@ test('registers, authenticates, and manages a baby profile end-to-end', async ()
   assert.ok(register.body.data.parent.id);
   accessToken = register.body.data.tokens.accessToken;
   refreshToken = register.body.data.tokens.refreshToken;
-  await WhatsAppLinkModel.create({
-    userId: register.body.data.user.id,
-    parentId: register.body.data.parent.id,
-    phoneE164: '+15551234567',
-    status: 'verified',
-    verifiedAt: new Date(),
-    verificationAttempts: 0
+  const startLink = await request(app)
+    .post('/api/parents/me/phone')
+    .set('Authorization', `Bearer ${accessToken}`)
+    .send({ phoneNumber: '+91 (98765) 43210' });
+  assert.equal(startLink.status, 202);
+  assert.equal(startLink.body.data.parent.phoneNumber, '919876543210');
+  assert.equal(startLink.body.data.parent.isPhoneVerified, false);
+  const verificationCode = whatsappReplies.at(-1).text;
+  assert.match(verificationCode, /^\d{6}$/);
+
+  const completeLink = await request(app)
+    .post('/api/parents/me/phone/verify')
+    .set('Authorization', `Bearer ${accessToken}`)
+    .send({ code: verificationCode });
+  assert.equal(completeLink.status, 200);
+  assert.equal(completeLink.body.data.parent.isPhoneVerified, true);
+
+  const duplicateRegistration = await request(app).post('/api/auth/register').send({
+    displayName: 'Another Parent',
+    email: 'another@example.com',
+    password: 'secure-password-123',
+    firstName: 'Another',
+    timezone: 'Asia/Kolkata'
   });
+  assert.equal(duplicateRegistration.status, 201);
+  const duplicateLink = await request(app)
+    .post('/api/parents/me/phone')
+    .set('Authorization', `Bearer ${duplicateRegistration.body.data.tokens.accessToken}`)
+    .send({ phoneNumber: '+919876543210' });
+  assert.equal(duplicateLink.status, 409);
+  assert.equal(duplicateLink.body.error.code, 'WHATSAPP_NUMBER_IN_USE');
 
   const login = await request(app)
     .post('/api/auth/login')
@@ -145,7 +168,7 @@ test('registers, authenticates, and manages a baby profile end-to-end', async ()
               value: {
                 messages: [
                   {
-                    from: '15551234567',
+                    from: '919876543210',
                     type: 'text',
                     text: { body: 'Fed 90ml' },
                     timestamp: '1737046800'
@@ -295,7 +318,7 @@ test('acknowledges an inbound webhook when Meta rejects the outbound reply', asy
                 value: {
                   messages: [
                     {
-                      from: '15551234567',
+                      from: '919876543210',
                       type: 'text',
                       text: { body: 'Fed 91ml' },
                       timestamp: '1737046801'

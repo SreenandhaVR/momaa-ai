@@ -74,7 +74,10 @@ function payloadForLogs(payload: WhatsAppPayload): WhatsAppPayload {
           ...payload.template,
           components: payload.template.components.map((component) => ({
             ...component,
-            parameters: component.parameters.map((parameter) => ({ ...parameter, text: '[redacted]' }))
+            parameters: component.parameters.map((parameter) => ({
+              ...parameter,
+              text: '[redacted]'
+            }))
           }))
         }
       : undefined
@@ -85,9 +88,17 @@ export function setWhatsAppSenderForTesting(sender?: Sender): void {
   senderForTesting = sender;
 }
 
-async function sendWhatsAppPayload(to: string, payload: Omit<WhatsAppPayload, 'to'>): Promise<WhatsAppSendResult> {
+async function sendWhatsAppPayload(
+  to: string,
+  payload: Omit<WhatsAppPayload, 'to'>
+): Promise<WhatsAppSendResult> {
   if (senderForTesting) {
-    const text = payload.type === 'text' ? payload.text?.body ?? '' : '[WhatsApp verification template]';
+    // The injected sender is test-only; exposing its rendered body lets tests
+    // complete the OTP loop without weakening production logging.
+    const text =
+      payload.type === 'text'
+        ? (payload.text?.body ?? '')
+        : (payload.template?.components[0]?.parameters[0]?.text ?? '');
     await senderForTesting(to, text);
     return { recipient: to, status: 200 };
   }

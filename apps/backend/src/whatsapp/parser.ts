@@ -1,3 +1,5 @@
+import { metaSenderToE164 } from './phone.js';
+
 export type WhatsAppMessageType = 'text' | 'audio' | 'image' | 'interactive' | 'unknown';
 export interface IncomingWhatsAppMessage {
   from: string;
@@ -8,7 +10,8 @@ export interface IncomingWhatsAppMessage {
 }
 
 export function normalizeWhatsAppPhone(phone: string): string {
-  return phone.replace(/\D/g, '');
+  // Keep parser and persisted-identity lookup on one canonical normalizer.
+  return metaSenderToE164(phone).slice(1);
 }
 
 export function parseWhatsAppWebhook(payload: unknown): IncomingWhatsAppMessage[] {

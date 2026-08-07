@@ -20,6 +20,7 @@ type AuthState = {
     timezone: string;
   }) => Promise<void>;
   signOut: () => Promise<void>;
+  setParent: (parent: Parent) => void;
 };
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -47,5 +48,6 @@ export const useAuthStore = create<AuthState>((set) => ({
   signOut: async () => {
     await clearTokens();
     set({ status: 'signedOut', user: undefined, parent: undefined, tokens: undefined });
-  }
+  },
+  setParent: (parent) => set({ parent })
 }));

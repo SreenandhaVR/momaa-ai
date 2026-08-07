@@ -29,6 +29,7 @@ export function serializeParent(parent: Stored<ParentRecord>): Parent {
     lastName: parent.lastName,
     relationshipToBaby: parent.relationshipToBaby,
     phoneNumber: parent.phoneNumber,
+    isPhoneVerified: parent.isPhoneVerified,
     babyIds: parent.babyIds.map(String),
     timezone: parent.timezone,
     createdAt: iso(parent.createdAt),

@@ -8,6 +8,7 @@ import { authRouter } from './routes/auth.routes.js';
 import { babyRouter } from './routes/baby.routes.js';
 import { chatRouter } from './routes/chat.routes.js';
 import { eventRouter } from './routes/event.routes.js';
+import { parentRouter } from './routes/parent.routes.js';
 import { expressionRouter } from './routes/expression.routes.js';
 import { supportRouter } from './routes/support.routes.js';
 import { whatsappLinkRouter } from './routes/whatsapp-link.routes.js';
@@ -18,7 +19,7 @@ export const app: Express = express();
 app.use(
   cors({
     origin: true,
-    credentials: true,
+    credentials: true
   })
 );
 
@@ -30,6 +31,7 @@ app.get('/health', (_request, response) => {
 });
 
 app.use('/api/auth', authRouter);
+app.use('/api/parents', parentRouter);
 app.use('/api/babies', babyRouter);
 app.use('/api/whatsapp-links', whatsappLinkRouter);
 app.use('/api', whatsappRouter);
@@ -39,8 +41,6 @@ app.use('/api', expressionRouter);
 app.use('/api', eventRouter);
 app.use('/api', supportRouter);
 
-app.use((_request, _response, next) =>
-  next(new ApiError(404, 'NOT_FOUND', 'Route not found.'))
-);
+app.use((_request, _response, next) => next(new ApiError(404, 'NOT_FOUND', 'Route not found.')));
 
 app.use(errorHandler);

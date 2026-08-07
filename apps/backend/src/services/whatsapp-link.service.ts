@@ -65,7 +65,11 @@ export async function verifyWhatsAppLink(input: {
   if (!link) throw new ApiError(404, 'NOT_FOUND', 'WhatsApp link not found.');
   if (link.status === 'verified') return link;
   if (codeExpired(link))
-    throw new ApiError(400, 'VERIFICATION_EXPIRED', 'This verification code has expired. Request a new one.');
+    throw new ApiError(
+      400,
+      'VERIFICATION_EXPIRED',
+      'This verification code has expired. Request a new one.'
+    );
   if (link.verificationAttempts >= maximumVerificationAttempts)
     throw new ApiError(
       429,
@@ -150,9 +154,20 @@ export async function unlinkWhatsAppLink(input: {
   if (result.deletedCount !== 1) throw new ApiError(404, 'NOT_FOUND', 'WhatsApp link not found.');
 }
 
-export async function findVerifiedWhatsAppLink(phoneE164: string): Promise<WhatsAppLinkRecord | null> {
+export async function findVerifiedWhatsAppLink(
+  phoneE164: string
+): Promise<WhatsAppLinkRecord | null> {
   return WhatsAppLinkModel.findOneAndUpdate(
     { phoneE164, status: 'verified' },
+    { $set: { lastInboundMessageAt: new Date() } },
+    { returnDocument: 'after' }
+  );
+}
+
+/** Used by the webhook to distinguish an unknown sender from an unverified one. */
+export async function findWhatsAppLink(phoneE164: string): Promise<WhatsAppLinkRecord | null> {
+  return WhatsAppLinkModel.findOneAndUpdate(
+    { phoneE164 },
     { $set: { lastInboundMessageAt: new Date() } },
     { returnDocument: 'after' }
   );

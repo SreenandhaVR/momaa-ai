@@ -33,6 +33,7 @@ export interface Parent extends Entity {
   lastName?: string;
   relationshipToBaby?: string;
   phoneNumber?: string;
+  isPhoneVerified: boolean;
   babyIds: EntityId[];
   timezone: string;
 }
