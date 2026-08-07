@@ -1,4 +1,12 @@
-import { DiaperModel, FeedModel, MemoryModel, SleepModel } from '../models/index.js';
+import {
+  DiaperModel,
+  FeedModel,
+  GrowthModel,
+  MedicineModel,
+  MemoryModel,
+  SleepModel,
+  VaccinationModel
+} from '../models/index.js';
 import { syncTimelineEvent } from './timeline.service.js';
 import type { Types } from 'mongoose';
 
@@ -115,4 +123,36 @@ export async function createMediaMemory(input: {
     occurredAt: input.occurredAt ?? new Date(),
     source: input.source
   });
+}
+
+export async function createMedicine(input: {
+  babyId: string;
+  name: string;
+  dosage: string;
+  administeredAt: Date;
+  source: 'app' | 'whatsapp' | 'import' | 'system';
+  notes?: string;
+}) {
+  return MedicineModel.create({ ...input, administrationMethod: 'oral' });
+}
+
+export async function createVaccination(input: {
+  babyId: string;
+  name: string;
+  administeredAt: Date;
+  source: 'app' | 'whatsapp' | 'import' | 'system';
+  notes?: string;
+}) {
+  return VaccinationModel.create(input);
+}
+
+export async function createGrowth(input: {
+  babyId: string;
+  recordedAt: Date;
+  weightKg?: number;
+  heightCm?: number;
+  source: 'app' | 'whatsapp' | 'import' | 'system';
+  notes?: string;
+}) {
+  return GrowthModel.create(input);
 }

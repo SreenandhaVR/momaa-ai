@@ -14,6 +14,7 @@ import {
 } from '../services/event-creation.service.js';
 import { sendWhatsAppMessage } from './client.js';
 import { parseWhatsAppIntent } from './intents.js';
+import { processWhatsAppIntent } from './intent.service.js';
 import { uploadWhatsAppMediaToCloudinary } from './media.js';
 import { metaSenderToE164 } from './phone.js';
 import { parseWhatsAppWebhook, type IncomingWhatsAppMessage } from './parser.js';
@@ -203,13 +204,25 @@ async function handleMessage(message: IncomingWhatsAppMessage): Promise<boolean>
     }
   }
   logMessage(message, 'intent_extraction_called', { incomingText: message.content });
-  const intent = parseWhatsAppIntent(message.content);
+  const extracted = await processWhatsAppIntent({
+    babyId: String(baby._id),
+    message: message.content,
+    occurredAt: message.timestamp
+  });
   logMessage(message, 'intent_extraction_result', {
-    detectedIntent: intent?.type ?? null,
-    parsedAmountMl: intent?.type === 'feed' ? intent.amountMl : null,
+    detectedIntent: extracted.intent.type,
+    confidence: extracted.intent.confidence,
+    parsedAmountMl: extracted.intent.amountMl ?? null,
     babyId: String(baby._id),
     familyId: String(parent._id)
   });
+  if (extracted.reply) return reply(message, extracted.reply);
+
+  // During rollout, retain the small deterministic parser only if the model
+  // explicitly returned unknown/low confidence. Ambiguous messages still fall
+  // through to normal chat rather than creating an event.
+  const intent = parseWhatsAppIntent(message.content);
+  if (intent) logMessage(message, 'intent_regex_fallback_used', { detectedIntent: intent.type });
   if (intent?.type === 'feed') {
     await createEvent(message, 'feed', () =>
       createFeed({
