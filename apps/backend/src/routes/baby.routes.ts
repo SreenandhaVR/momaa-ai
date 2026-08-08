@@ -6,15 +6,23 @@ import { ApiError, asyncHandler } from '../errors.js';
 import {
   AIInsightModel,
   BabyModel,
+  DiaperModel,
+  FeedModel,
   GrowthModel,
   MemoryModel,
+  MedicineModel,
   ParentModel,
+  SleepModel,
   TimelineEventModel,
   VaccinationModel
 } from '../models/index.js';
 import { serializeBaby } from '../serializers.js';
 import { buildRhythm } from '../services/rhythm.service.js';
-import { uploadImageToCloudinary, uploadToCloudinary } from '../services/cloudinary.service.js';
+import {
+  cloudinaryIsConfigured,
+  uploadImageToCloudinary,
+  uploadToCloudinary
+} from '../services/cloudinary.service.js';
 import { validateBody } from '../validation.js';
 
 const babyFields = {
@@ -88,6 +96,12 @@ babyRouter.post(
   photoUpload.single('photo'),
   asyncHandler(async (request, response) => {
     if (!request.file) throw new ApiError(400, 'VALIDATION_ERROR', 'An image file is required.');
+    if (!cloudinaryIsConfigured())
+      throw new ApiError(
+        503,
+        'MEDIA_UPLOAD_UNAVAILABLE',
+        'Photo uploads are not configured on the Momaa server yet. Please try again after Cloudinary is connected.'
+      );
     const baby = await BabyModel.findOne({
       _id: request.params.id,
       parentIds: request.auth!.parentId
@@ -107,6 +121,12 @@ babyRouter.post(
       throw new ApiError(400, 'VALIDATION_ERROR', 'A photo or voice note is required.');
     if (!request.file.mimetype.startsWith('image/') && !request.file.mimetype.startsWith('audio/'))
       throw new ApiError(400, 'VALIDATION_ERROR', 'Only images and audio are supported.');
+    if (!cloudinaryIsConfigured())
+      throw new ApiError(
+        503,
+        'MEDIA_UPLOAD_UNAVAILABLE',
+        'Photo uploads are not configured on the Momaa server yet. Please try again after Cloudinary is connected.'
+      );
     const baby = await BabyModel.findOne({
       _id: request.params.id,
       parentIds: request.auth!.parentId
@@ -151,14 +171,19 @@ babyRouter.get(
       parentIds: request.auth!.parentId
     });
     if (!baby) throw new ApiError(404, 'NOT_FOUND', 'Baby profile not found.');
-    const [insight, vaccinations, growth, timeline] = await Promise.all([
-      AIInsightModel.findOne({ babyId: baby._id }).sort({ generatedAt: -1 }),
-      VaccinationModel.find({ babyId: baby._id, nextDueAt: { $gte: new Date() } })
-        .sort({ nextDueAt: 1 })
-        .limit(3),
-      GrowthModel.find({ babyId: baby._id }).sort({ recordedAt: -1 }).limit(2),
-      TimelineEventModel.find({ babyId: baby._id }).sort({ occurredAt: -1 }).limit(3)
-    ]);
+    const [insight, vaccinations, growth, timeline, feeds, sleeps, diapers, medicines] =
+      await Promise.all([
+        AIInsightModel.findOne({ babyId: baby._id }).sort({ generatedAt: -1 }),
+        VaccinationModel.find({ babyId: baby._id, nextDueAt: { $gte: new Date() } })
+          .sort({ nextDueAt: 1 })
+          .limit(3),
+        GrowthModel.find({ babyId: baby._id }).sort({ recordedAt: -1 }).limit(2),
+        TimelineEventModel.find({ babyId: baby._id }).sort({ occurredAt: -1 }).limit(3),
+        FeedModel.find({ babyId: baby._id }).sort({ timestamp: -1 }).limit(3).lean(),
+        SleepModel.find({ babyId: baby._id }).sort({ startTime: -1 }).limit(3).lean(),
+        DiaperModel.find({ babyId: baby._id }).sort({ timestamp: -1 }).limit(3).lean(),
+        MedicineModel.find({ babyId: baby._id }).sort({ administeredAt: -1 }).limit(3).lean()
+      ]);
     const serialize = (value: { _id: unknown; toObject: () => Record<string, unknown> } | null) => {
       if (!value) return null;
       const raw = value.toObject();
@@ -169,13 +194,39 @@ babyRouter.get(
         ])
       );
     };
+    const rawMoments = [
+      ...feeds.map((item) => ({
+        id: String(item._id),
+        type: 'feed',
+        occurredAt: item.timestamp.toISOString()
+      })),
+      ...sleeps.map((item) => ({
+        id: String(item._id),
+        type: 'sleep',
+        occurredAt: item.startTime.toISOString()
+      })),
+      ...diapers.map((item) => ({
+        id: String(item._id),
+        type: 'diaper',
+        occurredAt: item.timestamp.toISOString()
+      })),
+      ...medicines.map((item) => ({
+        id: String(item._id),
+        type: 'medicine',
+        occurredAt: item.administeredAt.toISOString()
+      }))
+    ]
+      .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
+      .slice(0, 3);
     response.json({
       data: {
         baby: serializeBaby(baby),
         insight: serialize(insight),
         upcomingVaccinations: vaccinations.map(serialize),
         growth: growth.map(serialize),
-        recentTimeline: timeline.map(serialize)
+        // Raw event collections are the source of truth; TimelineEvent is retained
+        // as a fallback for older/imported records that predate timeline syncing.
+        recentTimeline: rawMoments.length ? rawMoments : timeline.map(serialize)
       }
     });
   })

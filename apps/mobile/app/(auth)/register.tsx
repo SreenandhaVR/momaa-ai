@@ -21,7 +21,7 @@ export default function RegisterScreen() {
         password,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
       }),
-    onSuccess: () => router.replace('/(tabs)' as never),
+    onSuccess: () => router.replace('/onboarding' as never),
     onError: (error) =>
       Alert.alert(
         'Could not create account',

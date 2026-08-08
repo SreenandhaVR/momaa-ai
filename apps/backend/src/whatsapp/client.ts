@@ -111,9 +111,10 @@ async function sendWhatsAppPayload(
   );
   const phoneNumberId = required('WHATSAPP_PHONE_NUMBER_ID');
   const accessToken = required('WHATSAPP_ACCESS_TOKEN');
+  const graphApiVersion = process.env.WHATSAPP_GRAPH_API_VERSION ?? 'v25.0';
   const recipient = to.replace(/\D/g, '');
   if (!recipient) throw new Error('A valid WhatsApp recipient phone number is required.');
-  const url = `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`;
+  const url = `https://graph.facebook.com/${graphApiVersion}/${phoneNumberId}/messages`;
   const requestPayload: WhatsAppPayload = { ...payload, to: recipient };
 
   console.info(
@@ -201,6 +202,23 @@ export async function sendWhatsAppVerificationCode(
   to: string,
   code: string
 ): Promise<WhatsAppSendResult> {
+  // Meta's supplied test WABA cannot use a template created in a separate
+  // production WABA. In this explicitly enabled test mode the recipient must
+  // first message the test number, which opens the 24-hour text-message window.
+  // Production always uses the approved authentication template below.
+  if (process.env.WHATSAPP_TEST_OTP_MODE === 'true') {
+    console.info(
+      JSON.stringify({
+        scope: 'whatsapp.send',
+        event: 'using_test_otp_text_fallback',
+        recipientE164: `+${to.replace(/\D/g, '')}`
+      })
+    );
+    return sendWhatsAppMessage(
+      to,
+      `Your Momaa verification code is ${code}. It expires in 10 minutes. Please do not share this code.`
+    );
+  }
   const templateName = required('WHATSAPP_VERIFICATION_TEMPLATE_NAME');
   const language = process.env.WHATSAPP_VERIFICATION_TEMPLATE_LANGUAGE ?? 'en_US';
   return sendWhatsAppPayload(to, {

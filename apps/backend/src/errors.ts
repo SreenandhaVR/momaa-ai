@@ -52,6 +52,19 @@ export const errorHandler: ErrorRequestHandler = (error, _request, response, _ne
     typeof error.status === 'number'
   ) {
     const details = 'details' in error ? error.details : undefined;
+    const metaCode =
+      typeof details === 'object' &&
+      details !== null &&
+      'error' in details &&
+      typeof details.error === 'object' &&
+      details.error !== null &&
+      'code' in details.error
+        ? details.error.code
+        : undefined;
+    // Meta uses 190 for an invalid/expired token and 131005 when a token is
+    // present but lacks access to the configured WhatsApp sender. Both are
+    // connection configuration failures, not template or recipient failures.
+    const isInvalidMetaToken = metaCode === 190 || metaCode === 131005;
     console.error(
       JSON.stringify({
         scope: 'api.error',
@@ -64,9 +77,12 @@ export const errorHandler: ErrorRequestHandler = (error, _request, response, _ne
     );
     response.status(502).json({
       error: {
-        code: 'WHATSAPP_DELIVERY_FAILED',
-        message:
-          'We could not send the WhatsApp verification code. Check the WhatsApp template and recipient configuration.',
+        code: isInvalidMetaToken
+          ? 'WHATSAPP_AUTHENTICATION_FAILED'
+          : 'WHATSAPP_DELIVERY_FAILED',
+        message: isInvalidMetaToken
+          ? 'Momaa\'s WhatsApp test connection is not authorized yet. Generate a fresh Meta test access token for the configured test number, then try again.'
+          : 'We could not send the WhatsApp verification code. Check the WhatsApp template and recipient configuration.',
         ...(details === undefined ? {} : { details })
       }
     });

@@ -21,6 +21,7 @@ export default function ProfileScreen() {
   );
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [verificationError, setVerificationError] = useState<string>();
 
   useEffect(() => {
     if (!tokens?.accessToken) return;
@@ -35,6 +36,7 @@ export default function ProfileScreen() {
   const sendCode = async () => {
     if (!tokens?.accessToken) return;
     setLoading(true);
+    setVerificationError(undefined);
     try {
       const result = await apiRequest<PhoneResponse>(
         '/parents/me/phone',
@@ -46,9 +48,13 @@ export default function ProfileScreen() {
       setCode('');
       Alert.alert('Verification code sent', 'Check WhatsApp for your six-digit verification code.');
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Please try again.';
+      setVerificationError(
+        `${message} Make sure Momaa's approved WhatsApp verification template is configured in Meta.`
+      );
       Alert.alert(
         'Could not send code',
-        error instanceof Error ? error.message : 'Please try again.'
+        `${message} Check that the Meta verification template is approved and the number can receive WhatsApp messages.`
       );
     } finally {
       setLoading(false);
@@ -116,6 +122,11 @@ export default function ProfileScreen() {
           >
             {verified ? 'Change number and send code' : 'Send verification code'}
           </Button>
+          {verificationError ? (
+            <Text className="mt-3 font-jakarta text-sm leading-5 text-error">
+              {verificationError}
+            </Text>
+          ) : null}
           {pending ? (
             <>
               <TextInput

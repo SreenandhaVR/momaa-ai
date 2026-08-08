@@ -6,6 +6,14 @@ function required(name: string): string {
   return value;
 }
 
+export function cloudinaryIsConfigured(): boolean {
+  return Boolean(
+    process.env.CLOUDINARY_CLOUD_NAME &&
+    process.env.CLOUDINARY_API_KEY &&
+    process.env.CLOUDINARY_API_SECRET
+  );
+}
+
 export async function uploadToCloudinary(
   buffer: Buffer,
   mimeType: string,
