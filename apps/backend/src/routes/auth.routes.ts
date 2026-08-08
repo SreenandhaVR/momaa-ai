@@ -16,7 +16,7 @@ const registerBody = z
     firstName: z.string().trim().min(1).max(100),
     lastName: z.string().trim().min(1).max(100).optional(),
     relationshipToBaby: z.string().trim().min(1).max(100).optional(),
-    timezone: z.string().trim().min(1).max(100).default('UTC')
+    timezone: z.string().trim().min(1).max(100).default('Asia/Kolkata')
   })
   .strict()
   .refine((value) => value.email || value.phoneNumber, {

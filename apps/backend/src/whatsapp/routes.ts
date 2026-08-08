@@ -207,7 +207,8 @@ async function handleMessage(message: IncomingWhatsAppMessage): Promise<boolean>
   const extracted = await processWhatsAppIntent({
     babyId: String(baby._id),
     message: message.content,
-    occurredAt: message.timestamp
+    occurredAt: message.timestamp,
+    timeZone: parent.timezone
   });
   logMessage(message, 'intent_extraction_result', {
     detectedIntent: extracted.intent.type,

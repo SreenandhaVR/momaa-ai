@@ -23,7 +23,9 @@ const parentSchema = new Schema<ParentRecord>(
     phoneNumber: { type: String, trim: true, unique: true, sparse: true, match: /^[1-9]\d{7,14}$/ },
     isPhoneVerified: { type: Boolean, required: true, default: false },
     babyIds: [{ type: Schema.Types.ObjectId, ref: 'Baby' }],
-    timezone: { type: String, required: true, default: 'UTC' }
+    // Keep the parent's IANA timezone so UI and WhatsApp reply text can be
+    // localized while all event timestamps remain stored as UTC Dates.
+    timezone: { type: String, required: true, default: 'Asia/Kolkata' }
   },
   { timestamps: true }
 );

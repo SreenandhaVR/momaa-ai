@@ -13,14 +13,29 @@ import { extractWhatsAppIntent, type ExtractedWhatsAppIntent } from './intent-ex
 
 const highConfidence = 0.75;
 
-function loggedTime(date: Date): string {
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+function loggedTime(date: Date, timeZone: string): string {
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone
+    }).format(date);
+  } catch {
+    // A bad timezone must never prevent logging a health event. New profiles
+    // default to Asia/Kolkata and the app always sends an IANA timezone.
+    return new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: 'Asia/Kolkata'
+    }).format(date);
+  }
 }
 
 export async function processWhatsAppIntent(input: {
   babyId: string;
   message: string;
   occurredAt?: Date;
+  timeZone: string;
 }): Promise<{ intent: ExtractedWhatsAppIntent; reply?: string }> {
   const intent = await extractWhatsAppIntent(input.message);
   if (intent.type === 'unknown' || intent.confidence < highConfidence) return { intent };
@@ -33,7 +48,10 @@ export async function processWhatsAppIntent(input: {
       source: 'whatsapp',
       timestamp: occurredAt
     });
-    return { intent, reply: `Got it — logged ${intent.amountMl}ml at ${loggedTime(occurredAt)}.` };
+    return {
+      intent,
+      reply: `Got it — logged ${intent.amountMl}ml at ${loggedTime(occurredAt, input.timeZone)}.`
+    };
   }
   if (intent.type === 'sleep_start') {
     await createSleep({
@@ -43,7 +61,10 @@ export async function processWhatsAppIntent(input: {
       isActive: true,
       source: 'whatsapp'
     });
-    return { intent, reply: `Got it — started a sleep session at ${loggedTime(occurredAt)}.` };
+    return {
+      intent,
+      reply: `Got it — started a sleep session at ${loggedTime(occurredAt, input.timeZone)}.`
+    };
   }
   if (intent.type === 'sleep_end') {
     const active = await SleepModel.findOne({ babyId: input.babyId, isActive: true }).sort({

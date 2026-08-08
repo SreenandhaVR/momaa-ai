@@ -12,8 +12,23 @@ import {
 import { normalizeE164PhoneNumber } from '../whatsapp/phone.js';
 import { validateBody } from '../validation.js';
 
-const phoneBody = z.object({ phoneNumber: z.string().trim().min(8).max(30) }).strict();
+const phoneBody = z
+  .object({
+    phoneNumber: z.string().trim().min(8).max(30),
+    timezone: z.string().trim().min(1).max(100).optional()
+  })
+  .strict();
 const codeBody = z.object({ code: z.string().regex(/^\d{6}$/) }).strict();
+const timezoneBody = z.object({ timezone: z.string().trim().min(1).max(100) }).strict();
+
+function isValidTimeZone(timezone: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: timezone });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export const parentRouter: Router = Router();
 parentRouter.use(requireAuth);
@@ -30,6 +45,24 @@ parentRouter.get(
   })
 );
 
+/** Updates the stored IANA timezone used for user-facing time formatting. */
+parentRouter.patch(
+  '/me/timezone',
+  validateBody(timezoneBody),
+  asyncHandler(async (request, response) => {
+    const timezone = (request.body as z.infer<typeof timezoneBody>).timezone;
+    if (!isValidTimeZone(timezone))
+      throw new ApiError(400, 'INVALID_TIMEZONE', 'Enter a valid IANA timezone, for example Asia/Kolkata.');
+    const parent = await ParentModel.findOneAndUpdate(
+      { _id: request.auth!.parentId, userId: request.auth!.userId },
+      { $set: { timezone } },
+      { new: true }
+    );
+    if (!parent) throw new ApiError(404, 'NOT_FOUND', 'Parent profile not found.');
+    response.json({ data: serializeParent(parent) });
+  })
+);
+
 /** Starts (or restarts) verification for the authenticated parent's WhatsApp number. */
 parentRouter.post(
   '/me/phone',
@@ -41,9 +74,8 @@ parentRouter.post(
     });
     if (!parent) throw new ApiError(404, 'NOT_FOUND', 'Parent profile not found.');
 
-    const phoneE164 = normalizeE164PhoneNumber(
-      (request.body as z.infer<typeof phoneBody>).phoneNumber
-    );
+    const { phoneNumber: requestedPhoneNumber, timezone } = request.body as z.infer<typeof phoneBody>;
+    const phoneE164 = normalizeE164PhoneNumber(requestedPhoneNumber);
     const phoneNumber = phoneE164.slice(1);
     const parentConflict = await ParentModel.exists({ phoneNumber, _id: { $ne: parent._id } });
     if (parentConflict)
@@ -71,6 +103,9 @@ parentRouter.post(
         });
 
     parent.phoneNumber = phoneNumber;
+    // The app supplies the device's IANA timezone whenever a parent links or
+    // re-links WhatsApp. This updates older UTC-defaulted profiles safely.
+    if (timezone) parent.timezone = timezone;
     parent.isPhoneVerified = false;
     await parent.save();
     response.status(202).json({

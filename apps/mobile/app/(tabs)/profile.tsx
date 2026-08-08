@@ -26,9 +26,20 @@ export default function ProfileScreen() {
   useEffect(() => {
     if (!tokens?.accessToken) return;
     void apiRequest<ParentResponse>('/parents/me', {}, tokens.accessToken)
-      .then((result) => {
-        setParent(result.data);
-        setPhoneNumber(result.data.phoneNumber ? `+${result.data.phoneNumber}` : '');
+      .then(async (result) => {
+        const deviceTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata';
+        const profile =
+          result.data.timezone === deviceTimezone
+            ? result.data
+            : (
+                await apiRequest<ParentResponse>(
+                  '/parents/me/timezone',
+                  { method: 'PATCH', body: JSON.stringify({ timezone: deviceTimezone }) },
+                  tokens.accessToken
+                )
+              ).data;
+        setParent(profile);
+        setPhoneNumber(profile.phoneNumber ? `+${profile.phoneNumber}` : '');
       })
       .catch((error) => console.error('Unable to load profile:', error));
   }, [setParent, tokens?.accessToken]);
@@ -40,7 +51,13 @@ export default function ProfileScreen() {
     try {
       const result = await apiRequest<PhoneResponse>(
         '/parents/me/phone',
-        { method: 'POST', body: JSON.stringify({ phoneNumber }) },
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            phoneNumber,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata'
+          })
+        },
         tokens.accessToken
       );
       setParent(result.data.parent);
