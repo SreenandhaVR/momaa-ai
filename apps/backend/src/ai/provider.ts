@@ -1,8 +1,11 @@
 import { MOMAA_SYSTEM_PROMPT } from './prompt.js';
 
 export type AIMessage = { role: 'user' | 'assistant'; content: string };
+export type VisionImageInput = { buffer: Buffer; mimeType: string };
 export interface AIProvider {
   generateResponse(messages: AIMessage[], context: string): Promise<string>;
+  /** Optional so existing text-only test providers remain valid. */
+  analyzeImage?(image: VisionImageInput, prompt: string): Promise<string>;
 }
 
 export class AIProviderError extends Error {
@@ -54,6 +57,10 @@ function openAIOutputText(body: unknown): string | undefined {
     .trim();
 }
 
+function asDataUrl(image: VisionImageInput): string {
+  return `data:${image.mimeType};base64,${image.buffer.toString('base64')}`;
+}
+
 export class OpenAIProvider implements AIProvider {
   async generateResponse(messages: AIMessage[], context: string): Promise<string> {
     const endpoint = 'https://api.openai.com/v1/responses';
@@ -92,6 +99,40 @@ export class OpenAIProvider implements AIProvider {
       throw new AIProviderError(error instanceof Error ? error.message : 'OpenAI request failed.', {
         provider: 'openai', endpoint, model
       });
+    }
+  }
+
+  async analyzeImage(image: VisionImageInput, prompt: string): Promise<string> {
+    const endpoint = 'https://api.openai.com/v1/responses';
+    const model = process.env.OPENAI_VISION_MODEL ?? process.env.OPENAI_MODEL ?? 'gpt-4o-mini';
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${required('OPENAI_API_KEY')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model,
+          store: false,
+          input: [{ role: 'user', content: [
+            { type: 'input_text', text: prompt },
+            { type: 'input_image', image_url: asDataUrl(image), detail: 'low' }
+          ] }]
+        })
+      });
+      const bodyText = await response.text();
+      const body = parseBody(bodyText);
+      if (!response.ok)
+        throw new AIProviderError(`OpenAI vision request failed with HTTP ${response.status}.`, {
+          provider: 'openai', endpoint, model, status: response.status, responseBody: body
+        });
+      const text = openAIOutputText(body);
+      if (!text) throw new AIProviderError('OpenAI returned no vision output text.', { provider: 'openai', endpoint, model, status: response.status, responseBody: body });
+      return text;
+    } catch (error) {
+      if (error instanceof AIProviderError) throw error;
+      throw new AIProviderError(error instanceof Error ? error.message : 'OpenAI vision request failed.', { provider: 'openai', endpoint, model });
     }
   }
 }
@@ -136,6 +177,40 @@ export class GroqProvider implements AIProvider {
       });
     }
   }
+
+  async analyzeImage(image: VisionImageInput, prompt: string): Promise<string> {
+    const endpoint = 'https://api.groq.com/openai/v1/responses';
+    const model = process.env.GROQ_VISION_MODEL ?? 'qwen/qwen3.6-27b';
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${required('GROQ_API_KEY')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model,
+          store: false,
+          input: [{ role: 'user', content: [
+            { type: 'input_text', text: prompt },
+            { type: 'input_image', image_url: asDataUrl(image), detail: 'low' }
+          ] }]
+        })
+      });
+      const bodyText = await response.text();
+      const body = parseBody(bodyText);
+      if (!response.ok)
+        throw new AIProviderError(`Groq vision request failed with HTTP ${response.status}.`, {
+          provider: 'groq', endpoint, model, status: response.status, responseBody: body
+        });
+      const text = openAIOutputText(body);
+      if (!text) throw new AIProviderError('Groq returned no vision output text.', { provider: 'groq', endpoint, model, status: response.status, responseBody: body });
+      return text;
+    } catch (error) {
+      if (error instanceof AIProviderError) throw error;
+      throw new AIProviderError(error instanceof Error ? error.message : 'Groq vision request failed.', { provider: 'groq', endpoint, model });
+    }
+  }
 }
 
 export class GeminiProvider implements AIProvider {
@@ -166,6 +241,31 @@ export class GeminiProvider implements AIProvider {
       .join('')
       .trim();
     if (!text) throw new Error('Gemini returned no text response.');
+    return text;
+  }
+
+  async analyzeImage(image: VisionImageInput, prompt: string): Promise<string> {
+    const model = process.env.GEMINI_VISION_MODEL ?? process.env.GEMINI_MODEL ?? 'gemini-2.0-flash';
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${required('GEMINI_API_KEY')}`;
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [
+          { text: prompt },
+          { inline_data: { mime_type: image.mimeType, data: image.buffer.toString('base64') } }
+        ] }]
+      })
+    });
+    const bodyText = await response.text();
+    const body = parseBody(bodyText);
+    if (!response.ok)
+      throw new AIProviderError(`Gemini vision request failed with HTTP ${response.status}.`, {
+        provider: 'gemini', endpoint, model, status: response.status, responseBody: body
+      });
+    const candidates = body as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+    const text = candidates.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('').trim();
+    if (!text) throw new AIProviderError('Gemini returned no vision output text.', { provider: 'gemini', endpoint, model, status: response.status, responseBody: body });
     return text;
   }
 }

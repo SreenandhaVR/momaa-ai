@@ -4,6 +4,7 @@ export { UserModel } from './user.model.js';
 export { WhatsAppLinkModel } from './whatsapp-link.model.js';
 export { WhatsAppPairingCodeModel } from './whatsapp-pairing-code.model.js';
 export { ExpressionLogModel } from './expression-log.model.js';
+export { InsightFeedbackModel } from './insight-feedback.model.js';
 export {
   AIInsightModel,
   ConversationModel,

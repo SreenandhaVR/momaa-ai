@@ -115,11 +115,20 @@ export async function createMediaMemory(input: {
   mediaUrl: string;
   source: 'app' | 'whatsapp' | 'import' | 'system';
   occurredAt?: Date;
+  description?: string;
+  imageAnalysis?: {
+    cloudinaryUrl: string;
+    caption: string;
+    category: 'baby-asleep' | 'baby-crying' | 'bottle' | 'medicine' | 'skin-concern' | 'other';
+    confidence: number;
+  };
 }) {
   return MemoryModel.create({
     babyId: input.babyId,
     title: input.title,
+    description: input.description,
     mediaUrls: [input.mediaUrl],
+    imageAnalysis: input.imageAnalysis,
     occurredAt: input.occurredAt ?? new Date(),
     source: input.source
   });

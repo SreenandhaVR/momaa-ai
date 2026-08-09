@@ -17,6 +17,7 @@ export type ConversationSender = 'parent' | 'assistant' | 'system';
 export type NotificationChannel = 'push' | 'whatsapp' | 'email' | 'in_app';
 export type NotificationStatus = 'pending' | 'sent' | 'read' | 'failed';
 export type ConfidenceLevel = 'learning' | 'low' | 'medium' | 'high' | 'very_high';
+export type InsightFeedbackType = 'helpful' | 'not_helpful' | 'correction';
 
 export interface User extends Entity {
   email?: string;
@@ -122,6 +123,12 @@ export interface Memory extends Entity {
   description?: string;
   occurredAt: ISODateString;
   mediaUrls: string[];
+  imageAnalysis?: {
+    cloudinaryUrl: string;
+    caption: string;
+    category: 'baby-asleep' | 'baby-crying' | 'bottle' | 'medicine' | 'skin-concern' | 'other';
+    confidence: number;
+  };
   source: EventSource;
 }
 
@@ -150,6 +157,15 @@ export interface AIInsight extends Entity {
   generatedAt: ISODateString;
   relatedEventIds: EntityId[];
   isDismissed: boolean;
+}
+
+export interface InsightFeedback extends Entity {
+  babyId: EntityId;
+  parentId: EntityId;
+  insightId?: EntityId;
+  type: InsightFeedbackType;
+  comment?: string;
+  timestamp: ISODateString;
 }
 
 export interface Notification extends Entity {

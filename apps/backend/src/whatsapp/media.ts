@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { uploadToCloudinary } from '../services/cloudinary.service.js';
 
 function required(name: string): string {
   const value = process.env[name];
@@ -6,7 +6,9 @@ function required(name: string): string {
   return value;
 }
 
-export async function uploadWhatsAppMediaToCloudinary(mediaId: string): Promise<string> {
+export async function downloadWhatsAppMedia(
+  mediaId: string
+): Promise<{ buffer: Buffer; mimeType: string }> {
   const token = required('WHATSAPP_ACCESS_TOKEN');
   const metadataResponse = await fetch(`https://graph.facebook.com/v20.0/${mediaId}`, {
     headers: { Authorization: `Bearer ${token}` }
@@ -20,26 +22,13 @@ export async function uploadWhatsAppMediaToCloudinary(mediaId: string): Promise<
   });
   if (!downloadResponse.ok)
     throw new Error(`WhatsApp media download failed with status ${downloadResponse.status}.`);
-  const timestamp = Math.floor(Date.now() / 1_000);
-  const apiSecret = required('CLOUDINARY_API_SECRET');
-  const signature = createHash('sha1').update(`timestamp=${timestamp}${apiSecret}`).digest('hex');
-  const form = new FormData();
-  form.append(
-    'file',
-    new Blob([await downloadResponse.arrayBuffer()], {
-      type: metadata.mime_type ?? 'application/octet-stream'
-    }),
-    mediaId
-  );
-  form.append('api_key', required('CLOUDINARY_API_KEY'));
-  form.append('timestamp', String(timestamp));
-  form.append('signature', signature);
-  const cloudinary = await fetch(
-    `https://api.cloudinary.com/v1_1/${required('CLOUDINARY_CLOUD_NAME')}/auto/upload`,
-    { method: 'POST', body: form }
-  );
-  if (!cloudinary.ok) throw new Error(`Cloudinary upload failed with status ${cloudinary.status}.`);
-  const result = (await cloudinary.json()) as { secure_url?: string };
-  if (!result.secure_url) throw new Error('Cloudinary returned no secure URL.');
-  return result.secure_url;
+  return {
+    buffer: Buffer.from(await downloadResponse.arrayBuffer()),
+    mimeType: metadata.mime_type ?? 'application/octet-stream'
+  };
+}
+
+export async function uploadWhatsAppMediaToCloudinary(mediaId: string): Promise<string> {
+  const media = await downloadWhatsAppMedia(mediaId);
+  return uploadToCloudinary(media.buffer, media.mimeType, 'auto');
 }

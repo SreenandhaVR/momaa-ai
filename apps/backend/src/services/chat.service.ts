@@ -1,9 +1,27 @@
 import { randomUUID } from 'node:crypto';
+import {
+  buildBabyMemoryContext,
+  renderBabyMemoryContext,
+  useBabyMemoryContext
+} from '../ai/baby-memory.js';
 import { buildRecentBabySummary } from '../ai/context.js';
 import { AIProviderError, getAIProvider, type AIMessage } from '../ai/provider.js';
 import { checkUrgentRedFlags } from '../ai/safety.js';
 import { ApiError } from '../errors.js';
-import { BabyModel, ConversationModel } from '../models/index.js';
+import { BabyModel, ConversationModel, ParentModel } from '../models/index.js';
+
+async function babyMemoryChatContext(input: { babyId: string; parentId: string }): Promise<string> {
+  const parent = await ParentModel.findById(input.parentId).select('timezone').lean();
+  const memory = await buildBabyMemoryContext({
+    babyId: input.babyId,
+    timeZone: parent?.timezone ?? 'UTC'
+  });
+  // A memory assembly failure or missing profile retains the established
+  // aggregate summary instead of blocking the parent from receiving a reply.
+  return memory
+    ? renderBabyMemoryContext(memory, parent?.timezone ?? 'UTC')
+    : buildRecentBabySummary(input.babyId);
+}
 
 export async function respondToBabyChat(input: {
   babyId: string;
@@ -26,7 +44,13 @@ export async function respondToBabyChat(input: {
     try {
       reply = await getAIProvider().generateResponse(
         [...history, { role: 'user', content: input.message }],
-        await buildRecentBabySummary(String(baby._id))
+        // Safety has already returned above. Context is assembled only for
+        // ordinary chat messages and never before the emergency check.
+        useBabyMemoryContext()
+          ? await babyMemoryChatContext({ babyId: String(baby._id), parentId: input.parentId })
+          // Disabled: this is the exact established call, with no Baby Memory
+          // reader, Rhythm query, or additional profile query on this branch.
+          : await buildRecentBabySummary(String(baby._id))
       );
     } catch (error) {
       if (error instanceof AIProviderError) {

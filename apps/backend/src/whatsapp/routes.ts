@@ -4,6 +4,7 @@ import { BabyModel, ParentModel, SleepModel } from '../models/index.js';
 import { findWhatsAppLink } from '../services/whatsapp-link.service.js';
 import { claimWhatsAppPairingCode } from '../services/whatsapp-pairing.service.js';
 import { buildRecentBabySummary } from '../ai/context.js';
+import { uploadToCloudinary } from '../services/cloudinary.service.js';
 import { respondToBabyChat } from '../services/chat.service.js';
 import {
   createDiaper,
@@ -15,9 +16,14 @@ import {
 import { sendWhatsAppMessage } from './client.js';
 import { parseWhatsAppIntent } from './intents.js';
 import { processWhatsAppIntent } from './intent.service.js';
-import { uploadWhatsAppMediaToCloudinary } from './media.js';
+import { downloadWhatsAppMedia, uploadWhatsAppMediaToCloudinary } from './media.js';
 import { metaSenderToE164 } from './phone.js';
 import { parseWhatsAppWebhook, type IncomingWhatsAppMessage } from './parser.js';
+import {
+  VisionService,
+  whatsappImageReply,
+  type WhatsAppImageAnalysis
+} from '../services/whatsapp/VisionService.js';
 
 function logMessage(
   message: IncomingWhatsAppMessage,
@@ -181,6 +187,63 @@ async function handleMessage(message: IncomingWhatsAppMessage): Promise<boolean>
       message,
       'Please add a baby profile in the Momaa app before logging updates here.'
     );
+  if (message.type === 'image' && message.mediaId) {
+    let mediaUrl: string;
+    let analysis: WhatsAppImageAnalysis = {
+      caption: 'A photo shared through WhatsApp.',
+      category: 'other',
+      confidence: 0
+    };
+    try {
+      const media = await downloadWhatsAppMedia(message.mediaId);
+      if (!media.mimeType.startsWith('image/')) throw new Error('WhatsApp media is not an image.');
+      mediaUrl = await uploadToCloudinary(media.buffer, media.mimeType, 'image');
+      try {
+        analysis = await new VisionService().analyzeImage(media.buffer);
+        logMessage(message, 'image_analysis_succeeded', {
+          category: analysis.category,
+          confidence: analysis.confidence
+        });
+      } catch (error) {
+        console.error(
+          JSON.stringify({
+            scope: 'whatsapp.webhook',
+            event: 'image_analysis_failed',
+            ...describeError(error)
+          })
+        );
+      }
+      await createEvent(message, 'image_memory', () =>
+        createMediaMemory({
+          babyId: String(baby._id),
+          title: 'WhatsApp image',
+          description: analysis.caption,
+          mediaUrl,
+          imageAnalysis: {
+            cloudinaryUrl: mediaUrl,
+            caption: analysis.caption,
+            category: analysis.category,
+            confidence: analysis.confidence
+          },
+          source: 'whatsapp',
+          occurredAt: message.timestamp
+        })
+      );
+      return reply(message, whatsappImageReply(analysis));
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          scope: 'whatsapp.webhook',
+          event: 'image_processing_failed',
+          ...describeError(error)
+        })
+      );
+      return reply(
+        message,
+        "I couldn't save that photo just now. Please try sending it again in a moment."
+      );
+    }
+  }
   if (message.mediaId) {
     try {
       const mediaUrl = await uploadWhatsAppMediaToCloudinary(message.mediaId);

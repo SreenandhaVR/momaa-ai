@@ -80,6 +80,12 @@ export interface MemoryRecord {
   description?: string;
   occurredAt: Date;
   mediaUrls: string[];
+  imageAnalysis?: {
+    cloudinaryUrl: string;
+    caption: string;
+    category: 'baby-asleep' | 'baby-crying' | 'bottle' | 'medicine' | 'skin-concern' | 'other';
+    confidence: number;
+  };
   source: string;
   createdAt: Date;
   updatedAt: Date;
@@ -251,6 +257,15 @@ export const MemoryModel = model<MemoryRecord>(
       description: { type: String, trim: true },
       occurredAt: { type: Date, required: true },
       mediaUrls: [{ type: String }],
+      imageAnalysis: {
+        cloudinaryUrl: { type: String, trim: true },
+        caption: { type: String, trim: true },
+        category: {
+          type: String,
+          enum: ['baby-asleep', 'baby-crying', 'bottle', 'medicine', 'skin-concern', 'other']
+        },
+        confidence: { type: Number, min: 0, max: 1 }
+      },
       source
     },
     options
